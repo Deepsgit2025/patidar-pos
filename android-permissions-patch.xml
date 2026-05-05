@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  AndroidManifest.xml — PERMISSIONS PATCH
+  ─────────────────────────────────────────────────────────────────────────────
+  INSTRUCTIONS:
+  1. Run: npx expo prebuild --platform android
+     This ejects to a bare workflow and generates android/app/src/main/AndroidManifest.xml
+
+  2. Add ALL of the <uses-permission> entries below into your generated manifest,
+     BEFORE the <application> tag.
+
+  3. If you are on Expo SDK 50+ with a bare workflow you can also use a
+     expo-build-properties config plugin to set targetSdkVersion (see setup guide).
+  ─────────────────────────────────────────────────────────────────────────────
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- ════════════════════════════════════════════════════════════════════
+         BLUETOOTH PERMISSIONS
+         Android 12+ (API 31+) — Nearby Devices permission group
+         Required for: scan, connect, advertise
+         neverForLocation="true" tells the OS this app does NOT use BT for location
+         ════════════════════════════════════════════════════════════════════ -->
+    <uses-permission android:name="android.permission.BLUETOOTH_SCAN"
+        android:usesPermissionFlags="neverForLocation" />
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    <uses-permission android:name="android.permission.BLUETOOTH_ADVERTISE" />
+
+    <!-- Legacy Bluetooth permissions — required on Android < 12 (API < 31) -->
+    <uses-permission android:name="android.permission.BLUETOOTH"
+        android:maxSdkVersion="30" />
+    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN"
+        android:maxSdkVersion="30" />
+
+    <!-- Location — still required by some OEM BT stacks (Xiaomi HyperOS included)
+         even on API 31+ for initial BT device discovery. -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+
+    <!-- Network state — needed by the BT library for socket management -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
+    <!-- ════════════════════════════════════════════════════════════════════
+         HARDWARE FEATURE DECLARATIONS
+         Tells the Play Store this app requires Bluetooth
+         ════════════════════════════════════════════════════════════════════ -->
+    <uses-feature android:name="android.hardware.bluetooth" android:required="true" />
+
+    <!-- ... rest of your manifest ... -->
+
+</manifest>
