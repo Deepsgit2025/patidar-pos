@@ -56,14 +56,14 @@ MENU.forEach(cat => cat.items.forEach(item => {
   CAT_MAP[item.id] = cat.id;
 }));
 
-export const addCustomMenuItem = (newItem, categoryId) => {
+export const addCustomMenuItem = (newItem, categoryId, emoji = "✨") => {
   let cat = MENU.find(c => c.id === categoryId || c.label.toLowerCase() === categoryId.toLowerCase());
   
   if (!cat) {
     cat = {
       id: categoryId.toLowerCase().replace(/[^a-z0-9]/g, '_'),
       label: categoryId,
-      emoji: "✨",
+      emoji: emoji,
       items: []
     };
     MENU.push(cat);
@@ -90,4 +90,16 @@ export const deleteMenuItem = (itemId) => {
   }
   delete ITEM_MAP[itemId];
   delete CAT_MAP[itemId];
+};
+
+export const removeCategoryAndItems = (categoryId) => {
+  const catIdx = MENU.findIndex(c => c.id === categoryId);
+  if (catIdx !== -1) {
+    const cat = MENU[catIdx];
+    cat.items.forEach(item => {
+      delete ITEM_MAP[item.id];
+      delete CAT_MAP[item.id];
+    });
+    MENU.splice(catIdx, 1);
+  }
 };

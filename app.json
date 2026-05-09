@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "Patidar-restaurant-mobile",
-    "slug": "Patidar-restaurant-mobile",
+    "name": "Patidar Restaurant",
+    "slug": "patidar-resto",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",

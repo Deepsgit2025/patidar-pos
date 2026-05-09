@@ -1,6 +1,5 @@
 import React from 'react';
 import { View, Text, Image, TouchableOpacity, StyleSheet, Dimensions } from 'react-native';
-import { COLORS } from '../constants/theme';
 import { SC_PRICE } from '../constants/menu';
 import { scKey } from '../utils/helpers';
 import QtyRow from './QtyRow';
@@ -11,7 +10,7 @@ const isTablet = width > 600;
 
 const FALLBACK_IMG = "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=300&q=80";
 
-export default function ItemCard({ item, plainEntry, scEntry, onAddPlain, onAddSC, onRemove, onGrams }) {
+export default function ItemCard({ item, plainEntry, scEntry, onAddPlain, onAddSC, onRemove, onGrams, customStyles }) {
   const anyInCart = !!plainEntry || !!scEntry;
   const canSC = item.withSevChutney === true;
 
@@ -24,8 +23,15 @@ export default function ItemCard({ item, plainEntry, scEntry, onAddPlain, onAddS
     }
   };
 
+  // Dynamic Styles
+  const cardBg = customStyles?.cardBg || "#000000";
+  const cardBorder = customStyles?.cardBorder || "rgba(255, 255, 255, 0.95)";
+  const textColor = customStyles?.textColor || "#FFFFFF";
+  const priceColor = customStyles?.priceColor || "#FBBF24";
+  const btnBg = customStyles?.btnBg || "#FFC300";
+
   return (
-    <View style={[styles.card, anyInCart && styles.cardOn]}>
+    <View style={[styles.card, { backgroundColor: cardBg, borderColor: anyInCart ? "#34D399" : cardBorder }, anyInCart && styles.cardOn]}>
       <TouchableOpacity activeOpacity={0.8} onPress={handleImageClick} style={styles.imgBox}>
         <Image
           source={{ uri: item.img || FALLBACK_IMG }}
@@ -42,10 +48,12 @@ export default function ItemCard({ item, plainEntry, scEntry, onAddPlain, onAddS
       </TouchableOpacity>
 
       <View style={styles.info}>
-        <Text style={styles.name}>{item.name}</Text>
-        <Text style={styles.price}>
-          ₹{item.price} <Text style={styles.unit}>/{item.unit}</Text>
-        </Text>
+        <View style={styles.namePriceRow}>
+          <Text style={[styles.name, { color: textColor }]}>{item.name}</Text>
+          <Text style={[styles.price, { color: priceColor }]}>
+            ₹{item.price} <Text style={[styles.unit, { color: textColor }]}>/{item.unit}</Text>
+          </Text>
+        </View>
 
         {item.byWeight && plainEntry ? (
           <WeightSelector item={item} entry={plainEntry} onGrams={onGrams} />
@@ -54,26 +62,26 @@ export default function ItemCard({ item, plainEntry, scEntry, onAddPlain, onAddS
         {canSC && (
           <View style={styles.variants}>
             <View style={styles.vBlock}>
-              <Text style={styles.vLabel} numberOfLines={1}>Plain</Text>
+              <Text style={[styles.vLabel, { color: textColor }]} numberOfLines={1}>Plain</Text>
               {plainEntry ? (
                 <View style={styles.qtyContainer}>
                   <QtyRow cartKey={item.id} qty={plainEntry.qty} onAdd={() => onAddPlain(item.id)} onRemove={onRemove} />
                 </View>
               ) : (
-                <TouchableOpacity style={[styles.addBtn, styles.addPlain]} onPress={() => onAddPlain(item.id)}>
-                  <Text style={[styles.addBtnText, { color: "#34D399" }]}>Add +</Text>
+                <TouchableOpacity style={[styles.addBtn, { backgroundColor: btnBg + '22', borderColor: btnBg }]} onPress={() => onAddPlain(item.id)}>
+                  <Text style={[styles.addBtnText, { color: btnBg }]}>Add +</Text>
                 </TouchableOpacity>
               )}
             </View>
             <View style={[styles.vBlock, styles.vBlockSC]}>
-              <Text style={styles.vLabel} numberOfLines={1}>+SC (+₹{SC_PRICE})</Text>
+              <Text style={[styles.vLabel, { color: textColor }]} numberOfLines={1}>+ Sev Chutney</Text>
               {scEntry ? (
                 <View style={styles.qtyContainer}>
                   <QtyRow cartKey={scKey(item.id)} qty={scEntry.qty} onAdd={() => onAddSC(item.id)} onRemove={onRemove} />
                 </View>
               ) : (
-                <TouchableOpacity style={[styles.addBtn, styles.addSCBtn]} onPress={() => onAddSC(item.id)}>
-                  <Text style={[styles.addBtnText, { color: "#FBBF24" }]}>Add +</Text>
+                <TouchableOpacity style={[styles.addBtn, { backgroundColor: btnBg + '44', borderColor: btnBg }]} onPress={() => onAddSC(item.id)}>
+                  <Text style={[styles.addBtnText, { color: btnBg }]}>Add +</Text>
                 </TouchableOpacity>
               )}
             </View>
@@ -85,8 +93,8 @@ export default function ItemCard({ item, plainEntry, scEntry, onAddPlain, onAddS
             {plainEntry ? (
               <QtyRow cartKey={item.id} qty={plainEntry.qty} onAdd={() => onAddPlain(item.id)} onRemove={onRemove} />
             ) : (
-              <TouchableOpacity style={[styles.addBtn, styles.addFull]} onPress={() => onAddPlain(item.id)}>
-                <Text style={[styles.addBtnText, { color: "#34D399" }]}>Add Item +</Text>
+              <TouchableOpacity style={[styles.addBtn, styles.addFull, { backgroundColor: btnBg + '22', borderColor: btnBg }]} onPress={() => onAddPlain(item.id)}>
+                <Text style={[styles.addBtnText, { color: btnBg }]}>Add Item +</Text>
               </TouchableOpacity>
             )}
           </View>
@@ -94,8 +102,8 @@ export default function ItemCard({ item, plainEntry, scEntry, onAddPlain, onAddS
 
         {item.byWeight && !plainEntry && (
           <View style={styles.singleAction}>
-            <TouchableOpacity style={[styles.addBtn, styles.addFull]} onPress={() => onAddPlain(item.id)}>
-              <Text style={[styles.addBtnText, { color: "#34D399" }]}>Add Weight +</Text>
+            <TouchableOpacity style={[styles.addBtn, styles.addFull, { backgroundColor: btnBg + '22', borderColor: btnBg }]} onPress={() => onAddPlain(item.id)}>
+              <Text style={[styles.addBtnText, { color: btnBg }]}>Add Weight +</Text>
             </TouchableOpacity>
           </View>
         )}
@@ -106,29 +114,23 @@ export default function ItemCard({ item, plainEntry, scEntry, onAddPlain, onAddS
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: "#0F172A",
     borderRadius: 20,
     overflow: "hidden",
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.05)",
     marginBottom: isTablet ? 12 : 8,
   },
-
   cardOn: {
     borderColor: "#34D399",
   },
-
   imgBox: {
-    height: isTablet ? 160 : 120,
+    height: isTablet ? 130 : 100,
     backgroundColor: "#020617",
     position: "relative",
   },
-
   img: {
     width: "100%",
     height: "100%",
   },
-
   badge: {
     position: "absolute",
     top: 10,
@@ -137,109 +139,80 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 20,
-    shadowColor: "#000",
-    shadowOpacity: 0.5,
-    shadowRadius: 4,
-    shadowOffset: { width: 0, height: 2 },
   },
-
   badgeText: {
     color: "#020617",
     fontSize: 12,
     fontWeight: "900",
   },
-
   info: {
     padding: isTablet ? 16 : 12,
   },
-
+  namePriceRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
   name: {
     fontSize: isTablet ? 16 : 14,
     fontWeight: "800",
-    color: "#F8FAFC",
-    marginBottom: 4,
+    flex: 1,
+    marginRight: 8,
   },
-
   price: {
     fontSize: isTablet ? 15 : 14,
     fontWeight: "800",
-    color: "#FBBF24",
-    marginBottom: 8,
   },
-
   unit: {
     fontSize: 12,
-    color: "#94A3B8",
     fontWeight: "600",
   },
-
   singleAction: {
     marginTop: 8,
     minHeight: isTablet ? 48 : 40,
     justifyContent: "center",
   },
-
   variants: {
     marginTop: 8,
     gap: 8,
   },
-
   vBlock: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    backgroundColor: "rgba(255,255,255,0.03)",
+    backgroundColor: "rgba(255, 255, 255, 0.05)",
     borderRadius: 14,
     paddingHorizontal: 10,
     paddingVertical: 8,
     minHeight: isTablet ? 56 : 48,
   },
-
   vBlockSC: {
-    backgroundColor: "rgba(245,158,11,0.04)",
+    backgroundColor: "rgba(255, 255, 255, 0.1)",
   },
-
   vLabel: {
     flex: 1,
     fontSize: isTablet ? 13 : 11,
-    color: "#CBD5E1",
     fontWeight: "600",
     marginRight: 6,
   },
-
   addBtn: {
     paddingVertical: 4,
-    paddingHorizontal: 4,
+    paddingHorizontal: 8,
     borderRadius: 10,
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1,
   },
-
   addFull: {
     width: "100%",
-    backgroundColor: "rgba(52,211,153,0.1)",
-    borderColor: "rgba(52,211,153,0.3)",
-    paddingVertical: 4,
+    paddingVertical: 8,
   },
-
-  addPlain: {
-    backgroundColor: "rgba(52,211,153,0.15)",
-    borderColor: "rgba(52,211,153,0.4)",
-  },
-
-  addSCBtn: {
-    backgroundColor: "rgba(245,158,11,0.15)",
-    paddingVertical: 4,
-    borderColor: "rgba(245,158,11,0.4)",
-  },
-
   addBtnText: {
     fontSize: isTablet ? 14 : 12,
-    fontWeight: "200",
+    fontWeight: "800",
   },
-
   qtyContainer: {
-    minWidth: isTablet ? 120 : 100, // Provides enough space so QtyRow doesn't squish out of bounds
+    minWidth: isTablet ? 120 : 100,
   }
 });

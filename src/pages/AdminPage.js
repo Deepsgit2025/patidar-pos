@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView, TextInput, TouchableOpacity, StyleSheet, Dimensions } from 'react-native';
+import { View, Text, ScrollView, TextInput, TouchableOpacity, StyleSheet, Dimensions, Alert } from 'react-native';
 import { COLORS } from '../constants/theme';
 import { loadAsync, saveAsync } from '../utils/storage';
 import { todayStr, monthKey, yearKey, fmtDate } from '../utils/helpers';
+import PrinterSetupScreen from './PrinterSetupScreen';
 
 const isTablet = Dimensions.get('window').width > 600;
 
@@ -12,6 +13,8 @@ const TABS = [
   { id: "purchases", label: "🛒 Purchases" },
   { id: "expenses", label: "💸 Expenses" },
   { id: "profit", label: "📈 Profit" },
+  { id: "printer", label: "🖨️ Printer" },
+  { id: "settings", label: "⚙️ Settings" },
 ];
 
 export default function AdminPage({ shop }) {
@@ -22,10 +25,25 @@ export default function AdminPage({ shop }) {
   const [purchases, setPurchases] = useState([]);
   const [expenses, setExpenses] = useState([]);
   const [selMonth, setSelMonth] = useState(todayStr().slice(0, 7));
+  const [scPrice, setScPrice] = useState(13);
+
 
   const [empF, setEmpF] = useState({ name: "", phone: "", salary: "" });
   const [purF, setPurF] = useState({ item: "", amount: "", date: todayStr() });
   const [expF, setExpF] = useState({ desc: "", amount: "", date: todayStr() });
+
+  const [isAuthorized, setIsAuthorized] = useState(false);
+  const [pinInput, setPinInput] = useState("");
+  const [savedPin, setSavedPin] = useState("1234");
+  const [newPin, setNewPin] = useState("");
+
+  useEffect(() => {
+    const fetchSecurity = async () => {
+      const pin = await loadAsync("admin_pin", "1234");
+      setSavedPin(pin);
+    };
+    fetchSecurity();
+  }, []);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -34,6 +52,7 @@ export default function AdminPage({ shop }) {
       setAttendance(await loadAsync("att_" + shop, {}));
       setPurchases(await loadAsync("pur_" + shop, []));
       setExpenses(await loadAsync("exp_" + shop, []));
+      setScPrice(Number(await loadAsync("sc_price", 13)));
     };
     fetchData();
   }, [shop]);
@@ -88,22 +107,53 @@ export default function AdminPage({ shop }) {
   const totSal = employees.reduce((s, e) => s + getPresent(e.id, selMonth) * Number(e.salary), 0);
   const profit = allTotal - totPur - totExp - totSal;
 
-  const renderStatsCard = (label, val, sub, cls) => {
-    const colors = {
-      green: COLORS.green, blue: COLORS.blue, orange: COLORS.orange, purple: COLORS.purple, red: COLORS.red
-    };
+  const renderStatsCard = (label, val, sub) => (
+    <View style={styles.statCard} key={label}>
+      <Text style={styles.scLabel}>{label}</Text>
+      <Text style={styles.scVal}>₹{val.toFixed(0)}</Text>
+      {sub && <Text style={styles.scSub}>{sub}</Text>}
+    </View>
+  );
+
+  if (!isAuthorized) {
     return (
-      <View style={[styles.statCard, { borderTopColor: colors[cls], borderTopWidth: 3 }]} key={label}>
-        <Text style={styles.scLabel}>{label}</Text>
-        <Text style={styles.scVal}>₹{val.toFixed(2)}</Text>
-        {sub && <Text style={styles.scSub}>{sub}</Text>}
+      <View style={styles.loginWrap}>
+        <View style={styles.loginCard}>
+          <Text style={styles.loginEmoji}>🔐</Text>
+          <Text style={styles.loginTitle}>Admin Access</Text>
+          <Text style={styles.loginSub}>Please enter your 4-digit PIN</Text>
+          <TextInput
+            style={styles.pinInp}
+            value={pinInput}
+            onChangeText={t => {
+              setPinInput(t);
+              if (t === savedPin) setIsAuthorized(true);
+            }}
+            placeholder="****"
+            placeholderTextColor="rgba(255,255,255,0.1)"
+            keyboardType="numeric"
+            secureTextEntry
+            maxLength={4}
+            autoFocus
+          />
+          {pinInput.length === 4 && pinInput !== savedPin && (
+            <Text style={styles.errorText}>❌ Incorrect PIN</Text>
+          )}
+        </View>
       </View>
     );
-  };
+  }
 
   return (
     <View style={styles.adminWrap}>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.adminTabbar} contentContainerStyle={{ paddingHorizontal: 16 }}>
+      <View style={styles.adminHeader}>
+        <Text style={styles.headerTitle}>Admin Dashboard</Text>
+        <TouchableOpacity onPress={() => setIsAuthorized(false)} style={styles.btnLogout}>
+          <Text style={styles.btnLogoutText}>Logout</Text>
+        </TouchableOpacity>
+      </View>
+
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.adminTabbar}>
         {TABS.map(t => (
           <TouchableOpacity key={t.id} style={[styles.adminTab, tab === t.id && styles.adminTabOn]} onPress={() => setTab(t.id)}>
             <Text style={[styles.adminTabText, tab === t.id && styles.adminTabTextOn]}>{t.label}</Text>
@@ -112,681 +162,632 @@ export default function AdminPage({ shop }) {
       </ScrollView>
 
       <ScrollView style={styles.adminBody} contentContainerStyle={styles.tabBodyContent}>
-
-        {/* ROW FILTER FOR MONTH */}
         {(tab === "sales" || tab === "employees" || tab === "profit") && (
           <View style={styles.rowFilter}>
-            <Text style={styles.filterLabel}>Month (YYYY-MM):</Text>
+            <Text style={styles.filterLabel}>Select Month:</Text>
             <TextInput
               style={styles.monthInp}
               value={selMonth}
               onChangeText={setSelMonth}
               placeholder="YYYY-MM"
+              placeholderTextColor="#666"
             />
           </View>
         )}
 
-        {/* ── SALES TAB ── */}
         {tab === "sales" && (
-          <View>
+          <View style={{ gap: 16 }}>
             <View style={styles.statsGrid}>
-              {renderStatsCard("Today", tTotal, `${tOrders.length} orders`, "green")}
-              {renderStatsCard("Monthly", mTotal, `${mOrders.length} orders`, "blue")}
-              {renderStatsCard("Annual", yTotal, `${yOrders.length} orders`, "orange")}
-              {renderStatsCard("All-time", allTotal, `${orders.length} orders`, "purple")}
+              {renderStatsCard("Today", tTotal, `${tOrders.length} orders`)}
+              {renderStatsCard("Monthly", mTotal, `${mOrders.length} orders`)}
+              {renderStatsCard("Annual", yTotal, `${yOrders.length} orders`)}
+              {renderStatsCard("Total", allTotal, `${orders.length} orders`)}
             </View>
 
             <View style={styles.box}>
-              <Text style={styles.boxTitle}>Category Sales</Text>
-              {Object.keys(catSales).length === 0 ? (
-                <Text style={styles.emptyTxt}>No sales yet</Text>
-              ) : (
-                Object.entries(catSales).map(([cat, amt]) => {
-                  const pct = Math.min(100, (amt / (allTotal || 1)) * 100);
-                  return (
-                    <View key={cat} style={styles.barRow}>
-                      <Text style={styles.barLbl}>{cat}</Text>
-                      <View style={styles.barTrack}>
-                        <View style={[styles.barFill, { width: `${pct}%` }]} />
-                      </View>
-                      <Text style={styles.barAmt}>₹{amt.toFixed(0)}</Text>
-                    </View>
-                  );
-                })
-              )}
-            </View>
-
-            <View style={styles.box}>
-              <Text style={styles.boxTitle}>Item-wise Sales</Text>
-              {Object.keys(itemSales).length === 0 ? (
-                <Text style={styles.emptyTxt}>No data</Text>
-              ) : (
-                Object.entries(itemSales).sort((a, b) => b[1] - a[1]).map(([name, amt]) => (
-                  <View key={name} style={styles.tblRow}>
-                    <Text style={styles.tblCellLeft}>{name}</Text>
-                    <Text style={styles.tblCellRight}>₹{amt.toFixed(0)}</Text>
+              <Text style={styles.boxTitle}>Category-wise Revenue</Text>
+              {Object.entries(catSales).map(([cat, amt]) => (
+                <View key={cat} style={styles.barRow}>
+                  <Text style={styles.barLbl}>{cat}</Text>
+                  <View style={styles.barTrack}>
+                    <View style={[styles.barFill, { width: `${Math.min(100, (amt / (allTotal || 1)) * 100)}%` }]} />
                   </View>
-                ))
-              )}
+                  <Text style={styles.barAmt}>₹{amt.toFixed(0)}</Text>
+                </View>
+              ))}
+            </View>
+
+            <View style={styles.box}>
+              <Text style={styles.boxTitle}>Top Selling Items</Text>
+              {Object.entries(itemSales).sort((a, b) => b[1] - a[1]).slice(0, 10).map(([name, amt]) => (
+                <View key={name} style={styles.tblRow}>
+                  <Text style={styles.tblCellLeft}>{name}</Text>
+                  <Text style={styles.tblCellRight}>₹{amt.toFixed(0)}</Text>
+                </View>
+              ))}
             </View>
           </View>
         )}
 
-        {/* ── EMPLOYEES TAB ── */}
         {tab === "employees" && (
-          <View>
+          <View style={{ gap: 16 }}>
             <View style={styles.box}>
-              <Text style={styles.boxTitle}>Add Employee</Text>
+              <Text style={styles.boxTitle}>New Employee</Text>
               <View style={styles.formRow}>
-                <TextInput style={styles.fInp} placeholder="Name" value={empF.name} onChangeText={t => setEmpF({ ...empF, name: t })} />
-                <TextInput style={styles.fInp} placeholder="Phone" value={empF.phone} onChangeText={t => setEmpF({ ...empF, phone: t })} keyboardType="phone-pad" />
-                <TextInput style={styles.fInp} placeholder="₹/day" value={empF.salary} onChangeText={t => setEmpF({ ...empF, salary: t })} keyboardType="numeric" />
+                <TextInput style={styles.fInp} placeholder="Name" placeholderTextColor="#666" value={empF.name} onChangeText={t => setEmpF({ ...empF, name: t })} />
+                <TextInput style={styles.fInp} placeholder="Phone" placeholderTextColor="#666" value={empF.phone} onChangeText={t => setEmpF({ ...empF, phone: t })} keyboardType="phone-pad" />
+                <TextInput style={styles.fInp} placeholder="Daily Salary (₹)" placeholderTextColor="#666" value={empF.salary} onChangeText={t => setEmpF({ ...empF, salary: t })} keyboardType="numeric" />
                 <TouchableOpacity style={styles.btnAdd} onPress={() => {
                   if (!empF.name || !empF.salary) return;
                   saveEmp([...employees, { id: Date.now().toString(), ...empF }]);
                   setEmpF({ name: "", phone: "", salary: "" });
                 }}>
-                  <Text style={styles.btnAddText}>Add</Text>
+                  <Text style={styles.btnAddText}>Add Employee</Text>
                 </TouchableOpacity>
               </View>
             </View>
 
-            {employees.length === 0 ? (
-              <Text style={styles.emptyTxt}>No employees added yet</Text>
-            ) : (
-              employees.map(emp => {
-                const present = getPresent(emp.id, selMonth);
-                const salary = present * Number(emp.salary);
-                return (
-                  <View key={emp.id} style={styles.box}>
-                    <View style={styles.empTop}>
-                      <View style={styles.empAv}><Text style={styles.empAvText}>{emp.name[0]?.toUpperCase()}</Text></View>
-                      <View style={styles.empInfo}>
-                        <Text style={styles.empName}>{emp.name}</Text>
-                        <Text style={styles.empSub}>📞 {emp.phone || "—"} · ₹{emp.salary}/day</Text>
-                      </View>
-                      <View style={styles.empNums}>
-                        <Text style={styles.empNumText}>Present: {present}d</Text>
-                        <Text style={styles.empNumText}>Salary: ₹{salary}</Text>
-                      </View>
-                      <TouchableOpacity style={styles.btnDelEmp} onPress={() => saveEmp(employees.filter(e => e.id !== emp.id))}>
-                        <Text style={styles.btnDelEmpText}>✕</Text>
-                      </TouchableOpacity>
+            {employees.map(emp => {
+              const present = getPresent(emp.id, selMonth);
+              return (
+                <View key={emp.id} style={styles.box}>
+                  <View style={styles.empTop}>
+                    <View style={styles.empAv}><Text style={styles.empAvText}>{emp.name[0]}</Text></View>
+                    <View style={styles.empInfo}>
+                      <Text style={styles.empName}>{emp.name}</Text>
+                      <Text style={styles.empSub}>{emp.phone} · ₹{emp.salary}/day</Text>
                     </View>
-                    <View style={styles.attRow}>
-                      {last7.map(date => {
-                        const p = !!attendance[`${emp.id}_${date}`];
-                        return (
-                          <TouchableOpacity key={date} style={[styles.attChip, p ? styles.attOn : styles.attOff]} onPress={() => toggleAtt(emp.id, date)}>
-                            <Text style={styles.attChipLabel}>{date.slice(8)}</Text>
-                            <Text style={styles.attChipLabel}>{p ? "✓" : "✗"}</Text>
-                          </TouchableOpacity>
-                        );
-                      })}
-                    </View>
+                    <TouchableOpacity onPress={() => saveEmp(employees.filter(e => e.id !== emp.id))} style={styles.btnDelIcon}>
+                      <Text style={styles.btnDelIconText}>✕</Text>
+                    </TouchableOpacity>
                   </View>
-                );
-              })
-            )}
+                  <View style={styles.attRow}>
+                    {last7.map(date => {
+                      const p = !!attendance[`${emp.id}_${date}`];
+                      return (
+                        <TouchableOpacity key={date} style={[styles.attChip, p ? styles.attOn : styles.attOff]} onPress={() => toggleAtt(emp.id, date)}>
+                          <Text style={styles.attChipLabel}>{date.slice(8)}</Text>
+                          <Text style={styles.attChipLabel}>{p ? "✓" : "✗"}</Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                  <View style={{ marginTop: 12, flexDirection: 'row', justifyContent: 'space-between' }}>
+                    <Text style={styles.tblCellLeft}>Attendance: {present} days</Text>
+                    <Text style={styles.tblCellRight}>Payable: ₹{present * Number(emp.salary)}</Text>
+                  </View>
+                </View>
+              );
+            })}
           </View>
         )}
 
-        {/* ── PURCHASES TAB ── */}
         {tab === "purchases" && (
-          <View>
+          <View style={{ gap: 16 }}>
             <View style={styles.box}>
-              <Text style={styles.boxTitle}>Add Purchase</Text>
+              <Text style={styles.boxTitle}>New Purchase</Text>
               <View style={styles.formRow}>
-                <TextInput style={styles.fInp} placeholder="Item" value={purF.item} onChangeText={t => setPurF({ ...purF, item: t })} />
-                <TextInput style={styles.fInp} placeholder="Amount" value={purF.amount} onChangeText={t => setPurF({ ...purF, amount: t })} keyboardType="numeric" />
-                <TextInput style={styles.fInp} placeholder="YYYY-MM-DD" value={purF.date} onChangeText={t => setPurF({ ...purF, date: t })} />
+                <TextInput style={styles.fInp} placeholder="Item/Stock" placeholderTextColor="#666" value={purF.item} onChangeText={t => setPurF({ ...purF, item: t })} />
+                <TextInput style={styles.fInp} placeholder="Amount (₹)" placeholderTextColor="#666" value={purF.amount} onChangeText={t => setPurF({ ...purF, amount: t })} keyboardType="numeric" />
+                <TextInput style={styles.fInp} placeholder="Date (YYYY-MM-DD)" placeholderTextColor="#666" value={purF.date} onChangeText={t => setPurF({ ...purF, date: t })} />
                 <TouchableOpacity style={styles.btnAdd} onPress={() => {
                   if (!purF.item || !purF.amount) return;
                   savePur([...purchases, { id: Date.now(), ...purF }]);
                   setPurF({ item: "", amount: "", date: todayStr() });
                 }}>
-                  <Text style={styles.btnAddText}>Add</Text>
+                  <Text style={styles.btnAddText}>Record Purchase</Text>
                 </TouchableOpacity>
               </View>
             </View>
-
             <View style={styles.box}>
               <View style={styles.boxTitleRow}>
-                <Text style={styles.boxTitle}>History</Text>
-                <Text style={styles.ttlBadge}>Total ₹{totPur.toFixed(2)}</Text>
+                <Text style={styles.boxTitle}>Recent Purchases</Text>
+                <Text style={styles.ttlBadge}>Total: ₹{totPur}</Text>
               </View>
-              {purchases.length === 0 ? (
-                <Text style={styles.emptyTxt}>No purchases</Text>
-              ) : (
-                purchases.slice().reverse().map(p => (
-                  <View key={p.id} style={styles.tblRow}>
-                    <Text style={[styles.tblCellLeft, { flex: 1.5 }]}>{fmtDate(p.date)}</Text>
-                    <Text style={[styles.tblCellLeft, { flex: 2 }]}>{p.item}</Text>
-                    <Text style={[styles.tblCellRight, { flex: 1.5 }]}>₹{Number(p.amount).toFixed(2)}</Text>
-                    <TouchableOpacity onPress={() => savePur(purchases.filter(x => x.id !== p.id))} style={styles.btnDelIcon}>
-                      <Text style={styles.btnDelIconText}>✕</Text>
-                    </TouchableOpacity>
+              {purchases.slice().reverse().map(p => (
+                <View key={p.id} style={styles.tblRow}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.tblCellRight}>{p.item}</Text>
+                    <Text style={styles.tblCellLeft}>{fmtDate(p.date)}</Text>
                   </View>
-                ))
-              )}
+                  <Text style={styles.tblCellRight}>₹{p.amount}</Text>
+                  <TouchableOpacity onPress={() => savePur(purchases.filter(x => x.id !== p.id))} style={styles.btnDelIcon}>
+                    <Text style={styles.btnDelIconText}>✕</Text>
+                  </TouchableOpacity>
+                </View>
+              ))}
             </View>
           </View>
         )}
 
-        {/* ── EXPENSES TAB ── */}
         {tab === "expenses" && (
-          <View>
+          <View style={{ gap: 16 }}>
             <View style={styles.box}>
-              <Text style={styles.boxTitle}>Add Expense</Text>
+              <Text style={styles.boxTitle}>New Expense</Text>
               <View style={styles.formRow}>
-                <TextInput style={styles.fInp} placeholder="Description" value={expF.desc} onChangeText={t => setExpF({ ...expF, desc: t })} />
-                <TextInput style={styles.fInp} placeholder="Amount" value={expF.amount} onChangeText={t => setExpF({ ...expF, amount: t })} keyboardType="numeric" />
-                <TextInput style={styles.fInp} placeholder="YYYY-MM-DD" value={expF.date} onChangeText={t => setExpF({ ...expF, date: t })} />
+                <TextInput style={styles.fInp} placeholder="Description" placeholderTextColor="#666" value={expF.desc} onChangeText={t => setExpF({ ...expF, desc: t })} />
+                <TextInput style={styles.fInp} placeholder="Amount (₹)" placeholderTextColor="#666" value={expF.amount} onChangeText={t => setExpF({ ...expF, amount: t })} keyboardType="numeric" />
+                <TextInput style={styles.fInp} placeholder="Date (YYYY-MM-DD)" placeholderTextColor="#666" value={expF.date} onChangeText={t => setExpF({ ...expF, date: t })} />
                 <TouchableOpacity style={styles.btnAdd} onPress={() => {
                   if (!expF.desc || !expF.amount) return;
                   saveExp([...expenses, { id: Date.now(), ...expF }]);
                   setExpF({ desc: "", amount: "", date: todayStr() });
                 }}>
-                  <Text style={styles.btnAddText}>Add</Text>
+                  <Text style={styles.btnAddText}>Record Expense</Text>
                 </TouchableOpacity>
               </View>
             </View>
-
             <View style={styles.box}>
               <View style={styles.boxTitleRow}>
-                <Text style={styles.boxTitle}>History</Text>
-                <Text style={styles.ttlBadge}>Total ₹{totExp.toFixed(2)}</Text>
+                <Text style={styles.boxTitle}>Recent Expenses</Text>
+                <Text style={styles.ttlBadge}>Total: ₹{totExp}</Text>
               </View>
-              {expenses.length === 0 ? (
-                <Text style={styles.emptyTxt}>No expenses</Text>
-              ) : (
-                expenses.slice().reverse().map(ex => (
-                  <View key={ex.id} style={styles.tblRow}>
-                    <Text style={[styles.tblCellLeft, { flex: 1.5 }]}>{fmtDate(ex.date)}</Text>
-                    <Text style={[styles.tblCellLeft, { flex: 2 }]}>{ex.desc}</Text>
-                    <Text style={[styles.tblCellRight, { flex: 1.5 }]}>₹{Number(ex.amount).toFixed(2)}</Text>
-                    <TouchableOpacity onPress={() => saveExp(expenses.filter(x => x.id !== ex.id))} style={styles.btnDelIcon}>
-                      <Text style={styles.btnDelIconText}>✕</Text>
-                    </TouchableOpacity>
+              {expenses.slice().reverse().map(ex => (
+                <View key={ex.id} style={styles.tblRow}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.tblCellRight}>{ex.desc}</Text>
+                    <Text style={styles.tblCellLeft}>{fmtDate(ex.date)}</Text>
                   </View>
-                ))
-              )}
+                  <Text style={styles.tblCellRight}>₹{ex.amount}</Text>
+                  <TouchableOpacity onPress={() => saveExp(expenses.filter(x => x.id !== ex.id))} style={styles.btnDelIcon}>
+                    <Text style={styles.btnDelIconText}>✕</Text>
+                  </TouchableOpacity>
+                </View>
+              ))}
             </View>
           </View>
         )}
 
-        {/* ── PROFIT TAB ── */}
         {tab === "profit" && (
-          <View>
+          <View style={{ gap: 16 }}>
             <View style={styles.statsGrid}>
-              {renderStatsCard("Revenue", allTotal, null, "green")}
-              {renderStatsCard("Purchases", totPur, null, "red")}
-              {renderStatsCard("Expenses", totExp, null, "orange")}
-              {renderStatsCard("Salaries", totSal, null, "blue")}
+              {renderStatsCard("Revenue", allTotal)}
+              {renderStatsCard("Purchases", totPur)}
+              {renderStatsCard("Expenses", totExp)}
+              {renderStatsCard("Salaries", totSal)}
             </View>
-
             <View style={[styles.profitBanner, profit >= 0 ? styles.pfPos : styles.pfNeg]}>
               <Text style={styles.pfTag}>Net {profit >= 0 ? "Profit" : "Loss"}</Text>
-              <Text style={styles.pfVal}>{profit >= 0 ? "+" : ""}₹{Math.abs(profit).toFixed(2)}</Text>
-              <Text style={styles.pfEq}>Revenue − Purchases − Expenses − Salaries</Text>
+              <Text style={styles.pfVal}>₹{Math.abs(profit).toFixed(0)}</Text>
+              <Text style={styles.pfEq}>Total Revenue − (Purchases + Expenses + Salaries)</Text>
             </View>
           </View>
         )}
 
+        {tab === "printer" && (
+          <View style={{ minHeight: 600 }}>
+            <PrinterSetupScreen />
+          </View>
+        )}
+
+        {tab === "settings" && (
+          <View style={{ gap: 16 }}>
+            <View style={styles.box}>
+              <Text style={styles.boxTitle}>Security Settings</Text>
+              <View style={styles.formRow}>
+                <Text style={styles.fLabel}>New 4-Digit Admin PIN</Text>
+                <TextInput
+                  style={styles.fInp}
+                  placeholder="Enter 4 digits"
+                  placeholderTextColor="#666"
+                  value={newPin}
+                  onChangeText={setNewPin}
+                  keyboardType="numeric"
+                  maxLength={4}
+                  secureTextEntry
+                />
+                <TouchableOpacity
+                  style={styles.btnAdd}
+                  onPress={async () => {
+                    if (newPin.length !== 4) return Alert.alert("Error", "PIN must be 4 digits");
+                    setSavedPin(newPin);
+                    await saveAsync("admin_pin", newPin);
+                    setNewPin("");
+                    Alert.alert("Success", "✅ Admin PIN updated!");
+                  }}
+                >
+                  <Text style={styles.btnAddText}>Save PIN</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+            <View style={styles.box}>
+              <Text style={styles.tblCellLeft}>Shop ID: {shop}</Text>
+            </View>
+            <View style={styles.box}>
+              <Text style={styles.boxTitle}>General Settings</Text>
+              <View style={styles.formRow}>
+                <Text style={styles.fLabel}>Default Sev Chutney (SC) Rate (₹)</Text>
+                <TextInput
+                  style={styles.fInp}
+                  placeholder="e.g. 13"
+                  placeholderTextColor="#666"
+                  value={String(scPrice)}
+                  onChangeText={t => setScPrice(t)}
+                  keyboardType="numeric"
+                />
+                <TouchableOpacity
+                  style={styles.btnAdd}
+                  onPress={async () => {
+                    await saveAsync("sc_price", Number(scPrice));
+                    Alert.alert("Success", "✅ SC Rate updated!");
+                  }}
+                >
+                  <Text style={styles.btnAddText}>Save SC Rate</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        )}
       </ScrollView>
     </View>
   );
 }
-const styles = StyleSheet.create({
 
+const styles = StyleSheet.create({
   adminWrap: {
     flex: 1,
-    backgroundColor: "#070503",
+    backgroundColor: "#060403",
   },
-
-  /* ── TAB BAR ── */
-  adminTabbar: {
-    maxHeight: isTablet ? 70 : 60,
-    backgroundColor: "rgba(10, 7, 4, 0.96)",
-    borderBottomWidth: 1,
-    borderBottomColor: "rgba(251, 100, 30, 0.1)",
-    paddingHorizontal: isTablet ? 6 : 2,
+  adminHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: isTablet ? 24 : 16,
+    paddingTop: isTablet ? 30 : 20,
+    backgroundColor: "rgba(232, 115, 10, 0.05)",
   },
-
-  adminTab: {
-    paddingVertical: isTablet ? 11 : 9,
-    paddingHorizontal: isTablet ? 22 : 15,
-    borderRadius: 28,
-    marginRight: isTablet ? 8 : 6,
-    marginTop: isTablet ? 11 : 8,
-    backgroundColor: "rgba(251, 100, 30, 0.05)",
+  headerTitle: {
+    fontSize: isTablet ? 28 : 22,
+    fontWeight: '900',
+    color: '#FFF0E6',
+    letterSpacing: 1,
+  },
+  btnLogout: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
     borderWidth: 1,
-    borderColor: "rgba(251, 100, 30, 0.1)",
+    borderColor: 'rgba(255, 255, 255, 0.1)',
   },
-
+  btnLogoutText: {
+    color: '#FBBF8A',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  adminTabbar: {
+    maxHeight: isTablet ? 75 : 65,
+    backgroundColor: "transparent",
+    paddingHorizontal: isTablet ? 10 : 5,
+    marginBottom: 10,
+  },
+  adminTab: {
+    paddingVertical: isTablet ? 12 : 10,
+    paddingHorizontal: isTablet ? 24 : 18,
+    borderRadius: 30,
+    marginRight: isTablet ? 10 : 8,
+    backgroundColor: "rgba(255, 255, 255, 0.02)",
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.05)",
+    height: isTablet ? 50 : 45,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 10,
+  },
   adminTabOn: {
-    backgroundColor: "rgba(251, 100, 30, 0.18)",
-    borderColor: "rgba(251, 100, 30, 0.6)",
-    shadowColor: "#FB641E",
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.45,
-    shadowRadius: 11,
+    backgroundColor: "rgba(232, 115, 10, 0.2)",
+    borderColor: "rgba(232, 115, 10, 0.5)",
+    shadowColor: "#E8730A",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+    elevation: 5,
   },
-
   adminTabText: {
-    color: "rgba(251, 180, 120, 0.34)",
-    fontSize: isTablet ? 13 : 12,
+    color: "rgba(255, 255, 255, 0.3)",
+    fontSize: isTablet ? 14 : 13,
     fontWeight: "600",
-    letterSpacing: 0.3,
   },
-
   adminTabTextOn: {
-    color: "#FBBF8A",
+    color: "#FFFFFF",
     fontWeight: "800",
-    textShadowColor: "rgba(251,100,30,0.65)",
-    textShadowOffset: { width: 0, height: 0 },
-    textShadowRadius: 7,
   },
-
-  /* ── BODY ── */
   adminBody: {
     flex: 1,
   },
-
   tabBodyContent: {
-    padding: isTablet ? 20 : 14,
-    gap: isTablet ? 16 : 13,
+    padding: isTablet ? 24 : 16,
+    gap: isTablet ? 20 : 16,
+    paddingBottom: 40,
   },
-
-  /* ── FILTER ── */
   rowFilter: {
-    marginBottom: isTablet ? 4 : 2,
+    marginBottom: 5,
   },
-
   filterLabel: {
-    color: "rgba(251, 180, 120, 0.3)",
-    fontSize: isTablet ? 10 : 9,
-    marginBottom: isTablet ? 7 : 5,
-    letterSpacing: 1.8,
+    color: "rgba(255, 255, 255, 0.4)",
+    fontSize: 12,
+    marginBottom: 8,
     textTransform: "uppercase",
-    fontWeight: "700",
+    letterSpacing: 1,
   },
-
   monthInp: {
+    backgroundColor: "rgba(255, 255, 255, 0.04)",
+    borderRadius: 16,
+    padding: 16,
+    color: "#FFF",
     borderWidth: 1,
-    borderColor: "rgba(251, 100, 30, 0.18)",
-    borderRadius: isTablet ? 14 : 11,
-    paddingVertical: isTablet ? 11 : 9,
-    paddingHorizontal: isTablet ? 16 : 12,
-    backgroundColor: "rgba(251, 100, 30, 0.05)",
-    color: "#FBBF8A",
-    fontSize: isTablet ? 14 : 13,
+    borderColor: "rgba(255, 255, 255, 0.1)",
   },
-
-  /* ── STATS GRID — 2-col on tablet, 1-col on mobile ── */
   statsGrid: {
     flexDirection: isTablet ? "row" : "column",
     flexWrap: isTablet ? "wrap" : "nowrap",
-    gap: isTablet ? 12 : 10,
+    gap: 16,
   },
-
   statCard: {
-    // tablet: 2-up; mobile: full width
-    width: isTablet ? `${(100 - 2) / 2}%` : "100%",
-    backgroundColor: "rgba(251, 100, 30, 0.07)",
-    borderRadius: isTablet ? 20 : 15,
-    padding: isTablet ? 18 : 14,
+    width: isTablet ? "48%" : "100%",
+    backgroundColor: "rgba(255, 255, 255, 0.03)",
+    borderRadius: 24,
+    padding: 22,
     borderWidth: 1,
-    borderColor: "rgba(251, 100, 30, 0.17)",
-    shadowColor: "#FB641E",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 16,
-    overflow: "hidden",
-    // no flex — avoid stretch
-    alignSelf: "flex-start",
-    minWidth: isTablet ? "48%" : "100%",
+    borderColor: "rgba(255, 255, 255, 0.05)",
   },
-
   scLabel: {
-    fontSize: isTablet ? 10 : 9,
-    color: "rgba(251, 180, 120, 0.34)",
-    letterSpacing: 1.8,
+    fontSize: 10,
+    color: "rgba(255, 255, 255, 0.4)",
+    letterSpacing: 2,
     textTransform: "uppercase",
+    fontWeight: "800",
+    marginBottom: 4,
+  },
+  scVal: {
+    fontSize: 28,
+    fontWeight: "900",
+    color: "#FFFFFF",
+  },
+  scSub: {
+    fontSize: 12,
+    color: "#E8730A",
+    marginTop: 6,
     fontWeight: "700",
   },
-
-  scVal: {
-    fontSize: isTablet ? 30 : 24,
-    fontWeight: "900",
-    color: "#FFF0E6",
-    letterSpacing: -0.5,
-    marginTop: isTablet ? 4 : 2,
-    textShadowColor: "rgba(251,100,30,0.3)",
-    textShadowOffset: { width: 0, height: 0 },
-    textShadowRadius: 12,
-  },
-
-  scSub: {
-    fontSize: isTablet ? 12 : 10,
-    color: "#FB9A5A",
-    marginTop: isTablet ? 5 : 3,
-    fontWeight: "600",
-  },
-
-  /* ── BOX ── */
   box: {
-    backgroundColor: "rgba(251, 100, 30, 0.05)",
-    borderRadius: isTablet ? 20 : 15,
-    padding: isTablet ? 18 : 13,
+    backgroundColor: "rgba(255, 255, 255, 0.02)",
+    borderRadius: 24,
+    padding: 22,
     borderWidth: 1,
-    borderColor: "rgba(251, 100, 30, 0.12)",
-    shadowColor: "#FB641E",
-    shadowOffset: { width: 0, height: 5 },
-    shadowOpacity: 0.08,
-    shadowRadius: 20,
+    borderColor: "rgba(255, 255, 255, 0.05)",
   },
-
   boxTitleRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: isTablet ? 14 : 10,
+    marginBottom: 16,
   },
-
   boxTitle: {
-    fontSize: isTablet ? 15 : 13,
-    fontWeight: "800",
-    color: "#FFE4CC",
-    letterSpacing: 0.2,
+    fontSize: 18,
+    fontWeight: "900",
+    color: "#FFFFFF",
   },
-
   ttlBadge: {
-    fontSize: isTablet ? 11 : 10,
-    color: "#FB9A5A",
-    backgroundColor: "rgba(251, 100, 30, 0.13)",
-    paddingHorizontal: isTablet ? 9 : 7,
-    paddingVertical: isTablet ? 4 : 2,
-    borderRadius: 9,
-    fontWeight: "700",
-    borderWidth: 1,
-    borderColor: "rgba(251, 100, 30, 0.22)",
+    fontSize: 12,
+    color: "#E8730A",
+    backgroundColor: "rgba(232, 115, 10, 0.1)",
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 12,
+    fontWeight: "800",
   },
-
-  /* ── BAR GRAPH ── */
   barRow: {
-    marginBottom: isTablet ? 13 : 10,
+    marginBottom: 12,
   },
-
   barLbl: {
-    color: "rgba(251, 180, 120, 0.42)",
-    fontSize: isTablet ? 12 : 11,
-    marginBottom: isTablet ? 5 : 3,
-    fontWeight: "600",
+    color: "rgba(255, 255, 255, 0.5)",
+    fontSize: 12,
+    marginBottom: 4,
   },
-
   barTrack: {
-    height: isTablet ? 11 : 8,
-    backgroundColor: "rgba(255,255,255,0.025)",
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: "rgba(251, 100, 30, 0.09)",
-    overflow: "hidden",
+    height: 8,
+    backgroundColor: "rgba(255, 255, 255, 0.05)",
+    borderRadius: 4,
   },
-
   barFill: {
     height: "100%",
-    backgroundColor: "#FB641E",
-    borderRadius: 6,
-    shadowColor: "#FB641E",
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.65,
-    shadowRadius: 7,
+    backgroundColor: "#E8730A",
+    borderRadius: 4,
   },
-
   barAmt: {
-    fontSize: isTablet ? 12 : 10,
-    color: "#FBBF8A",
-    marginTop: 3,
-    fontWeight: "600",
+    color: "#FFF",
+    fontSize: 12,
+    marginTop: 4,
+    fontWeight: "700",
   },
-
-  /* ── TABLE ── */
   tblRow: {
     flexDirection: "row",
     justifyContent: "space-between",
-    paddingVertical: isTablet ? 12 : 9,
+    paddingVertical: 14,
     borderBottomWidth: 1,
-    borderBottomColor: "rgba(251, 100, 30, 0.07)",
+    borderBottomColor: "rgba(255, 255, 255, 0.05)",
   },
-
   tblCellLeft: {
-    color: "rgba(251, 180, 120, 0.38)",
-    fontSize: isTablet ? 13 : 12,
-    fontWeight: "600",
+    color: "rgba(255, 255, 255, 0.6)",
+    fontSize: 14,
   },
-
   tblCellRight: {
-    color: "#FFE4CC",
+    color: "#FFF",
     fontWeight: "800",
-    fontSize: isTablet ? 13 : 12,
+    fontSize: 14,
   },
-
-  /* Empty state — styled placeholder */
-  emptyTxt: {
-    textAlign: "center",
-    paddingVertical: isTablet ? 32 : 22,
-    color: "rgba(251, 100, 30, 0.18)",
-    fontSize: isTablet ? 13 : 11,
-    letterSpacing: 1.2,
-    textTransform: "uppercase",
-    fontWeight: "600",
-  },
-
-  emptyIcon: {
-    textAlign: "center",
-    fontSize: isTablet ? 36 : 28,
-    opacity: 0.15,
-    marginBottom: isTablet ? 8 : 5,
-  },
-
-  /* ── FORM ── */
   formRow: {
-    gap: isTablet ? 12 : 9,
-    marginTop: isTablet ? 12 : 9,
+    gap: 12,
+    marginTop: 8,
   },
-
+  fLabel: {
+    color: "rgba(255, 255, 255, 0.5)",
+    fontSize: 12,
+  },
   fInp: {
-    width: "100%",
+    backgroundColor: "rgba(255, 255, 255, 0.04)",
+    borderRadius: 16,
+    padding: 16,
+    color: "#FFF",
     borderWidth: 1,
-    borderColor: "rgba(251, 100, 30, 0.17)",
-    borderRadius: isTablet ? 14 : 11,
-    paddingVertical: isTablet ? 12 : 10,
-    paddingHorizontal: isTablet ? 16 : 12,
-    backgroundColor: "rgba(251, 100, 30, 0.04)",
-    color: "#FFE4CC",
-    fontSize: isTablet ? 14 : 13,
+    borderColor: "rgba(255, 255, 255, 0.1)",
   },
-
   btnAdd: {
-    backgroundColor: "rgba(251, 100, 30, 0.18)",
-    borderWidth: 1,
-    borderColor: "rgba(251, 100, 30, 0.52)",
-    paddingVertical: isTablet ? 13 : 11,
-    borderRadius: isTablet ? 14 : 11,
+    height: 54,
+    backgroundColor: "#E8730A",
+    borderRadius: 16,
     alignItems: "center",
-    shadowColor: "#FB641E",
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.42,
-    shadowRadius: 14,
-    elevation: 7,
+    justifyContent: "center",
   },
-
   btnAddText: {
-    color: "#FBBF8A",
+    color: "#FFF",
     fontWeight: "900",
-    fontSize: isTablet ? 14 : 12,
-    letterSpacing: 0.8,
     textTransform: "uppercase",
+    letterSpacing: 1,
   },
-
-  /* ── EMPLOYEE CARD ── */
   empTop: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: isTablet ? 12 : 9,
+    marginBottom: 16,
   },
-
   empAv: {
-    width: isTablet ? 50 : 40,
-    height: isTablet ? 50 : 40,
-    borderRadius: isTablet ? 25 : 20,
-    backgroundColor: "rgba(251, 100, 30, 0.12)",
-    borderWidth: 2,
-    borderColor: "rgba(251, 100, 30, 0.4)",
+    width: 50,
+    height: 50,
+    borderRadius: 16,
+    backgroundColor: "rgba(232, 115, 10, 0.1)",
     alignItems: "center",
     justifyContent: "center",
-    marginRight: isTablet ? 14 : 10,
-    shadowColor: "#FB641E",
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.3,
-    shadowRadius: 9,
-    flexShrink: 0,
+    marginRight: 16,
   },
-
   empAvText: {
-    color: "#FB9A5A",
+    color: "#E8730A",
     fontWeight: "900",
-    fontSize: isTablet ? 15 : 13,
+    fontSize: 20,
   },
-
   empInfo: {
     flex: 1,
-    minWidth: 0,   // allow text to ellipsis
   },
-
   empName: {
-    color: "#FFE4CC",
-    fontSize: isTablet ? 15 : 13,
+    color: "#FFF",
+    fontSize: 16,
     fontWeight: "800",
-    numberOfLines: 1,
   },
-
   empSub: {
-    color: "rgba(251, 180, 120, 0.32)",
-    fontSize: isTablet ? 12 : 10,
-    marginTop: 2,
-    fontWeight: "600",
-    numberOfLines: 1,
+    color: "rgba(255, 255, 255, 0.4)",
+    fontSize: 12,
   },
-
-  empNums: {
-    alignItems: "flex-end",
-    flexShrink: 0,
-  },
-
-  empNumText: {
-    fontSize: isTablet ? 11 : 10,
-    color: "rgba(251, 180, 120, 0.35)",
-    fontWeight: "600",
-  },
-
-  btnDelEmp: {
-    marginLeft: isTablet ? 12 : 8,
-    padding: 4,
-    flexShrink: 0,
-  },
-
-  btnDelEmpText: {
-    color: "#FCA5A5",
-    fontSize: isTablet ? 20 : 16,
-    fontWeight: "900",
-  },
-
-  /* ── ATTENDANCE ── */
   attRow: {
-    flexDirection: "row",
-    gap: isTablet ? 6 : 4,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
   },
-
   attChip: {
-    flex: 1,
-    paddingVertical: isTablet ? 9 : 7,
-    borderRadius: isTablet ? 11 : 9,
-    alignItems: "center",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
     borderWidth: 1,
   },
-
   attOn: {
-    backgroundColor: "rgba(251, 100, 30, 0.16)",
-    borderColor: "rgba(251, 100, 30, 0.52)",
-    shadowColor: "#FB641E",
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.32,
-    shadowRadius: 7,
+    backgroundColor: "rgba(52, 211, 153, 0.1)",
+    borderColor: "rgba(52, 211, 153, 0.3)",
   },
-
   attOff: {
-    backgroundColor: "rgba(255,255,255,0.025)",
-    borderColor: "rgba(255,255,255,0.055)",
+    backgroundColor: "rgba(239, 68, 68, 0.1)",
+    borderColor: "rgba(239, 68, 68, 0.3)",
   },
-
   attChipLabel: {
-    color: "#FBBF8A",
-    fontSize: isTablet ? 11 : 9,
+    color: "#FFF",
+    fontSize: 10,
     fontWeight: "700",
-    letterSpacing: 0.4,
   },
-
-  /* ── PROFIT BANNER ── */
   profitBanner: {
-    padding: isTablet ? 22 : 16,
-    borderRadius: isTablet ? 20 : 15,
-    alignItems: "center",
+    padding: 24,
+    borderRadius: 24,
+    alignItems: 'center',
     borderWidth: 1,
   },
-
   pfPos: {
-    backgroundColor: "rgba(52, 211, 153, 0.09)",
-    borderColor: "rgba(52, 211, 153, 0.36)",
-    shadowColor: "#34D399",
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.25,
-    shadowRadius: 18,
+    backgroundColor: "rgba(52, 211, 153, 0.1)",
+    borderColor: "rgba(52, 211, 153, 0.3)",
   },
-
   pfNeg: {
-    backgroundColor: "rgba(251, 100, 30, 0.1)",
-    borderColor: "rgba(251, 100, 30, 0.38)",
-    shadowColor: "#FB641E",
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.25,
-    shadowRadius: 18,
+    backgroundColor: "rgba(239, 68, 68, 0.1)",
+    borderColor: "rgba(239, 68, 68, 0.3)",
   },
-
   pfTag: {
-    fontSize: isTablet ? 11 : 10,
-    color: "#FB9A5A",
-    letterSpacing: 2.2,
+    fontSize: 12,
+    color: "rgba(255, 255, 255, 0.6)",
     textTransform: "uppercase",
-    fontWeight: "700",
-    marginBottom: 5,
+    letterSpacing: 2,
+    marginBottom: 8,
   },
-
   pfVal: {
-    fontSize: isTablet ? 36 : 28,
+    fontSize: 42,
     fontWeight: "900",
-    color: "#FFF0E6",
-    letterSpacing: -1,
-    textShadowColor: "rgba(251,100,30,0.45)",
-    textShadowOffset: { width: 0, height: 0 },
-    textShadowRadius: 14,
+    color: "#FFF",
   },
-
   pfEq: {
-    fontSize: isTablet ? 11 : 9,
-    color: "rgba(251, 180, 120, 0.28)",
-    marginTop: 5,
-    letterSpacing: 0.4,
+    fontSize: 10,
+    color: "rgba(255, 255, 255, 0.3)",
+    marginTop: 8,
   },
+  loginWrap: {
+    flex: 1,
+    backgroundColor: "#060403",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  loginCard: {
+    width: "85%",
+    maxWidth: 400,
+    backgroundColor: "rgba(255, 255, 255, 0.03)",
+    borderRadius: 32,
+    padding: 32,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.1)",
+  },
+  loginEmoji: {
+    fontSize: 48,
+    marginBottom: 16,
+  },
+  loginTitle: {
+    color: "#FFFFFF",
+    fontSize: 24,
+    fontWeight: "900",
+    marginBottom: 8,
+  },
+  loginSub: {
+    color: "rgba(255, 255, 255, 0.4)",
+    fontSize: 14,
+    marginBottom: 24,
+  },
+  pinInp: {
+    width: "100%",
+    height: 60,
+    backgroundColor: "rgba(255, 255, 255, 0.05)",
+    borderRadius: 20,
+    textAlign: "center",
+    fontSize: 32,
+    fontWeight: "900",
+    color: "#E8730A",
+    letterSpacing: 20,
+    borderWidth: 1,
+    borderColor: "rgba(232, 115, 10, 0.3)",
+  },
+  errorText: {
+    color: "#EF4444",
+    marginTop: 16,
+    fontWeight: "700",
+  },
+  btnDelIcon: {
+    padding: 8,
+  },
+  btnDelIconText: {
+    color: "#EF4444",
+    fontSize: 16,
+  }
 });

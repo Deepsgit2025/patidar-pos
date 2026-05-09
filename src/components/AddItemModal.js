@@ -6,13 +6,17 @@ import { MENU } from '../constants/menu';
 const { width } = Dimensions.get('window');
 const isTablet = width > 600;
 
+const EMOJIS = ["✨", "🍲", "🍬", "🥨", "🥤", "🍰", "🍛", "🍦", "🥪", "🍕", "🍔", "🍿", "🍩"];
+
 export default function AddItemModal({ visible, onClose, onAdd }) {
   const [name, setName] = useState("");
   const [price, setPrice] = useState("");
   const [category, setCategory] = useState(MENU[0].id);
   const [newCategoryName, setNewCategoryName] = useState("");
+  const [newCategoryEmoji, setNewCategoryEmoji] = useState(EMOJIS[0]);
   const [byWeight, setByWeight] = useState(false);
   const [photoUrl, setPhotoUrl] = useState("");
+  const [withSevChutney, setWithSevChutney] = useState(false);
 
   const pickImage = async () => {
     let result = await ImagePicker.launchImageLibraryAsync({
@@ -20,7 +24,7 @@ export default function AddItemModal({ visible, onClose, onAdd }) {
       allowsEditing: true,
       aspect: [4, 3],
       quality: 0.5,
-      base64: true, // Request base64
+      base64: true,
     });
 
     if (!result.canceled && result.assets && result.assets.length > 0) {
@@ -34,8 +38,12 @@ export default function AddItemModal({ visible, onClose, onAdd }) {
   };
 
   const handleAdd = () => {
-    if (!name.trim() || !price.trim()) {
-      alert("Name and Price are required!");
+    if (!name.trim()) {
+      alert("Item Name is required!");
+      return;
+    }
+    if (!price.trim() || isNaN(parseFloat(price))) {
+      alert("Please enter a valid Price!");
       return;
     }
 
@@ -44,8 +52,9 @@ export default function AddItemModal({ visible, onClose, onAdd }) {
       name: name.trim(),
       price: parseFloat(price),
       byWeight: byWeight,
+      withSevChutney: withSevChutney,
       unit: byWeight ? "kg" : "pc",
-      img: photoUrl.trim() || "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=300&q=80" // default food image
+      img: photoUrl.trim() || "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=300&q=80"
     };
 
     let finalCategoryId = category;
@@ -55,13 +64,17 @@ export default function AddItemModal({ visible, onClose, onAdd }) {
         return;
       }
       finalCategoryId = newCategoryName.trim();
+      // We pass the emoji as part of the category ID if it's new? 
+      // Actually, addCustomMenuItem in constants/menu.js only takes categoryId.
+      // I should update it to take emoji too.
     }
 
-    onAdd(newItem, finalCategoryId);
+    onAdd(newItem, finalCategoryId, newCategoryEmoji);
 
     setName("");
     setPrice("");
     setByWeight(false);
+    setWithSevChutney(false);
     setPhotoUrl("");
     setNewCategoryName("");
     setCategory(MENU[0].id);
@@ -91,21 +104,33 @@ export default function AddItemModal({ visible, onClose, onAdd }) {
                 <View style={styles.chipRow}>
                   {MENU.map(cat => (
                     <TouchableOpacity key={cat.id} style={[styles.chip, category === cat.id && styles.chipActive]} onPress={() => setCategory(cat.id)}>
-                      <Text style={[styles.chipText, category === cat.id && styles.chipTextActive]}>{cat.label}</Text>
+                      <Text style={[styles.chipText, category === cat.id && styles.chipTextActive]}>{cat.emoji} {cat.label}</Text>
                     </TouchableOpacity>
                   ))}
                   <TouchableOpacity style={[styles.chip, category === 'new' && styles.chipActive]} onPress={() => setCategory('new')}>
                     <Text style={[styles.chipText, category === 'new' && styles.chipTextActive]}>+ New Category</Text>
                   </TouchableOpacity>
                 </View>
+                
                 {category === 'new' && (
-                  <TextInput
-                    style={[styles.input, { marginTop: 10 }]}
-                    placeholder="Enter new category name..."
-                    value={newCategoryName}
-                    onChangeText={setNewCategoryName}
-                    placeholderTextColor="#888"
-                  />
+                  <View style={{ marginTop: 12, backgroundColor: 'rgba(0,0,0,0.03)', padding: 12, borderRadius: 16, borderWidth: 1, borderColor: 'rgba(0,0,0,0.1)' }}>
+                    <Text style={[styles.label, { fontSize: 10 }]}>Category Details</Text>
+                    <TextInput
+                      style={[styles.input, { marginBottom: 10 }]}
+                      placeholder="Category name (e.g. Pizza)"
+                      value={newCategoryName}
+                      onChangeText={setNewCategoryName}
+                      placeholderTextColor="#888"
+                    />
+                    <Text style={[styles.label, { fontSize: 10 }]}>Select Emoji</Text>
+                    <View style={styles.emojiRow}>
+                      {EMOJIS.map(e => (
+                        <TouchableOpacity key={e} style={[styles.emojiBtn, newCategoryEmoji === e && styles.emojiActive]} onPress={() => setNewCategoryEmoji(e)}>
+                          <Text style={{ fontSize: 20 }}>{e}</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  </View>
                 )}
               </View>
 
@@ -122,9 +147,21 @@ export default function AddItemModal({ visible, onClose, onAdd }) {
               </View>
 
               <View style={styles.field}>
-                <Text style={styles.label}>Photo URL (Optional)</Text>
+                <Text style={styles.label}>Ask for Sev Chutney?</Text>
+                <View style={styles.chipRow}>
+                  <TouchableOpacity style={[styles.chip, !withSevChutney && styles.chipActive]} onPress={() => setWithSevChutney(false)}>
+                    <Text style={[styles.chipText, !withSevChutney && styles.chipTextActive]}>No</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={[styles.chip, withSevChutney && styles.chipActive]} onPress={() => setWithSevChutney(true)}>
+                    <Text style={[styles.chipText, withSevChutney && styles.chipTextActive]}>Yes</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              <View style={styles.field}>
+                <Text style={styles.label}>Photo (Optional)</Text>
                 <View style={{ flexDirection: 'row', gap: 10 }}>
-                  <TextInput style={[styles.input, { flex: 1 }]} placeholder="https://..." value={photoUrl} onChangeText={setPhotoUrl} placeholderTextColor="#888" />
+                  <TextInput style={[styles.input, { flex: 1 }]} placeholder="URL or Pick Image..." value={photoUrl} onChangeText={setPhotoUrl} placeholderTextColor="#888" />
                   <TouchableOpacity style={styles.imageBtn} onPress={pickImage}>
                     <Text style={styles.imageBtnText}>🖼 Pick</Text>
                   </TouchableOpacity>
@@ -165,6 +202,9 @@ const styles = StyleSheet.create({
   chipActive: { backgroundColor: "#000", borderColor: "#000" },
   chipText: { color: "rgba(0,0,0,0.6)", fontWeight: "600", fontSize: 14 },
   chipTextActive: { color: "#fff" },
+  emojiRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 4 },
+  emojiBtn: { padding: 8, borderRadius: 12, backgroundColor: '#fff', borderWidth: 1, borderColor: 'rgba(0,0,0,0.05)' },
+  emojiActive: { backgroundColor: '#FFC300', borderColor: '#000' },
   imageBtn: { backgroundColor: "rgba(0,0,0,0.05)", borderWidth: 1, borderColor: "rgba(0,0,0,0.15)", borderRadius: 12, alignItems: "center", justifyContent: "center", paddingHorizontal: 16 },
   imageBtnText: { fontSize: 16, fontWeight: '600', color: "rgba(0,0,0,0.8)" },
   actions: { flexDirection: "row", gap: 12, marginTop: 24 },

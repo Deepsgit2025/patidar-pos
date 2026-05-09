@@ -18,7 +18,7 @@ import {
   getPrinterState,
   printRaw,
   buildGSTInvoice,
-} from '../utils/BluetoothPrinter';
+} from './BluetoothPrinter';
 import { prepareInvoice } from '../utils/invoiceBuilder';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 

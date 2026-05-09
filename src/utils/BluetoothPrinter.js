@@ -1,16 +1,7 @@
-/**
- * BluetoothPrinter.js
- * ─────────────────────────────────────────────────────────────────────────────
- * Direct ESC/POS thermal printing over Bluetooth SPP (Serial Port Profile).
- * Zero-latency: keeps the BT socket OPEN between jobs — no 3-second handshake.
- *
- * Library: react-native-bluetooth-escpos-printer
- * Targets : Android 12+ (API 31+) / Xiaomi HyperOS + POS-80C 80 mm printer
- * ─────────────────────────────────────────────────────────────────────────────
- */
+
 
 import { Platform, PermissionsAndroid, Alert } from 'react-native';
-import BluetoothEscposPrinter from 'react-native-bluetooth-escpos-printer';
+import { BluetoothManager, BluetoothEscposPrinter } from 'react-native-bluetooth-escpos-printer';
 
 // ─── Singleton connection state ───────────────────────────────────────────────
 const PrinterState = {
@@ -21,55 +12,55 @@ const PrinterState = {
 
 // ─── ESC/POS Constants ────────────────────────────────────────────────────────
 export const ESC = '\x1B';
-export const GS  = '\x1D';
-export const FS  = '\x1C';
-
-export const ESCPOS = {
-  // Initialise / Reset
-  INIT            : `${ESC}@`,
-
-  // Alignment
-  ALIGN_LEFT      : `${ESC}a\x00`,
-  ALIGN_CENTER    : `${ESC}a\x01`,
-  ALIGN_RIGHT     : `${ESC}a\x02`,
-
-  // Bold
-  BOLD_ON         : `${ESC}E\x01`,
-  BOLD_OFF        : `${ESC}E\x00`,
-
-  // Underline
-  UNDERLINE_ON    : `${ESC}-\x01`,
-  UNDERLINE_OFF   : `${ESC}-\x00`,
-
-  // Font size — normal / double-width / double-height / double-size
-  FONT_NORMAL     : `${GS}!\x00`,
-  FONT_DOUBLE_W   : `${GS}!\x20`,
-  FONT_DOUBLE_H   : `${GS}!\x10`,
-  FONT_DOUBLE     : `${GS}!\x30`,   // 2× width + 2× height
-
-  // Line feed / carriage return
-  LF              : '\n',
-  CR              : '\r',
-
-  // Paper cut
-  CUT_FULL        : `${GS}V\x00`,           // Full cut
-  CUT_PARTIAL     : `${GS}V\x01`,           // Partial cut (leaves 1 point)
-  CUT_FEED_FULL   : `${GS}V\x42\x0A`,      // Feed 10 lines then full cut
-
-  // Cash drawer — kick pin 2 (most common wiring)
-  CASH_DRAWER     : `${ESC}p\x00\x19\xFA`, // Pin 2, 25 ms ON, 250 ms OFF
-
-  // Character sets
-  CHARSET_PC437   : `${ESC}t\x00`,
-  CHARSET_PC858   : `${ESC}t\x13`,
-
-  // Line spacing
-  LINE_SPACING_DEFAULT : `${ESC}2`,
-  LINE_SPACING_SET     : (n) => `${ESC}3${String.fromCharCode(n)}`,
-};
+export const GS = '\x1D';
+export const FS = '\x1C';
 
 // Printer column width for 80 mm paper at 42 chars/line (font A)
 export const COLS = 42;
+
+export const ESCPOS = {
+  // Initialise / Reset
+  INIT: `${ESC}@`,
+
+  // Alignment
+  ALIGN_LEFT: `${ESC}a\x00`,
+  ALIGN_CENTER: `${ESC}a\x01`,
+  ALIGN_RIGHT: `${ESC}a\x02`,
+
+  // Bold
+  BOLD_ON: `${ESC}E\x01`,
+  BOLD_OFF: `${ESC}E\x00`,
+
+  // Underline
+  UNDERLINE_ON: `${ESC}-\x01`,
+  UNDERLINE_OFF: `${ESC}-\x00`,
+
+  // Font size — normal / double-width / double-height / double-size
+  FONT_NORMAL: `${GS}!\x00`,
+  FONT_DOUBLE_W: `${GS}!\x20`,
+  FONT_DOUBLE_H: `${GS}!\x10`,
+  FONT_DOUBLE: `${GS}!\x30`,   // 2× width + 2× height
+
+  // Line feed / carriage return
+  LF: '\n',
+  CR: '\r',
+
+  // Paper cut
+  CUT_FULL: `${GS}V\x00`,           // Full cut
+  CUT_PARTIAL: `${GS}V\x01`,           // Partial cut (leaves 1 point)
+  CUT_FEED_FULL: `${GS}V\x42\x0A`,      // Feed 10 lines then full cut
+
+  // Cash drawer — kick pin 2 (most common wiring)
+  CASH_DRAWER: `${ESC}p\x00\x19\xFA`, // Pin 2, 25 ms ON, 250 ms OFF
+
+  // Character sets
+  CHARSET_PC437: `${ESC}t\x00`,
+  CHARSET_PC858: `${ESC}t\x13`,
+
+  // Line spacing
+  LINE_SPACING_DEFAULT: `${ESC}2`,
+  LINE_SPACING_SET: (n) => `${ESC}3${String.fromCharCode(n)}`,
+};
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  PERMISSION MANAGEMENT  (Android 12+ / API 31+)
@@ -149,11 +140,23 @@ export async function getPairedDevices() {
   if (!hasPermission) return [];
 
   try {
-    const devices = await BluetoothEscposPrinter.getDeviceList();
-    console.log('[BTPrinter] Paired devices:', devices);
-    return devices || [];
+    // enableBluetooth returns paired devices list on this library
+    const response = await BluetoothManager.enableBluetooth();
+    console.log('[BTPrinter] enableBluetooth response:', response);
+
+    // The library sometimes returns stringified JSONs in an array
+    if (Array.isArray(response)) {
+      return response.map(d => {
+        try {
+          return typeof d === 'string' ? JSON.parse(d) : d;
+        } catch (e) {
+          return d;
+        }
+      });
+    }
+    return [];
   } catch (err) {
-    console.error('[BTPrinter] getDeviceList error:', err);
+    console.error('[BTPrinter] getPairedDevices error:', err);
     return [];
   }
 }
@@ -189,7 +192,10 @@ export async function connectToPrinter(macAddress, deviceName = 'Printer') {
   PrinterState.isConnecting = true;
   try {
     console.log(`[BTPrinter] Connecting to ${deviceName} (${macAddress})…`);
-    await BluetoothEscposPrinter.connect(macAddress);
+    await BluetoothManager.connect(macAddress);
+
+    // Set width for 80mm printer (576 pixels)
+    await BluetoothEscposPrinter.setWidth(576);
 
     PrinterState.isConnected = true;
     PrinterState.connectedDevice = { name: deviceName, address: macAddress };
@@ -211,7 +217,7 @@ export async function connectToPrinter(macAddress, deviceName = 'Printer') {
  */
 export async function disconnectPrinter() {
   try {
-    await BluetoothEscposPrinter.disconnect();
+    await BluetoothManager.disableBluetooth();
   } catch (_) {
     // Ignore — socket may already be closed
   } finally {
@@ -258,7 +264,7 @@ function center(str, width) {
   const s = String(str ?? '');
   if (s.length >= width) return s.slice(0, width);
   const total = width - s.length;
-  const left  = Math.floor(total / 2);
+  const left = Math.floor(total / 2);
   const right = total - left;
   return ' '.repeat(left) + s + ' '.repeat(right);
 }
@@ -266,7 +272,7 @@ function center(str, width) {
 /**
  * Divider line of `char` repeated `width` times.
  */
-function divider(char = '-', width = COLS) {
+export function divider(char = '-', width = COLS) {
   return char.repeat(width);
 }
 
@@ -322,7 +328,7 @@ export function buildGSTInvoice(invoice) {
     totalGST,
     grandTotal,
     paymentMode = 'Cash',
-    openDrawer  = false,
+    openDrawer = false,
   } = invoice;
 
   const lines = [];
@@ -395,12 +401,12 @@ export function buildGSTInvoice(invoice) {
 
   // ── Totals ────────────────────────────────────────────────────────────────
   const totW1 = COLS - 10;
-  add(padEnd('Subtotal:', totW1)        + padStart(`${subtotal.toFixed(2)}`, 10) + ESCPOS.LF);
-  add(padEnd('Total GST:', totW1)       + padStart(`${totalGST.toFixed(2)}`, 10) + ESCPOS.LF);
+  add(padEnd('Subtotal:', totW1) + padStart(`${subtotal.toFixed(2)}`, 10) + ESCPOS.LF);
+  add(padEnd('Total GST:', totW1) + padStart(`${totalGST.toFixed(2)}`, 10) + ESCPOS.LF);
   add(divider('=') + ESCPOS.LF);
 
   add(ESCPOS.BOLD_ON);
-  add(padEnd('GRAND TOTAL:', totW1)     + padStart(`Rs.${grandTotal.toFixed(2)}`, 10) + ESCPOS.LF);
+  add(padEnd('GRAND TOTAL:', totW1) + padStart(`Rs.${grandTotal.toFixed(2)}`, 10) + ESCPOS.LF);
   add(ESCPOS.BOLD_OFF);
 
   add(divider('-') + ESCPOS.LF);
@@ -430,20 +436,34 @@ export function buildGSTInvoice(invoice) {
 //  PRINT DISPATCHER  (keeps socket alive between calls)
 // ─────────────────────────────────────────────────────────────────────────────
 
-const CHUNK_SIZE     = 512;   // bytes — prevents BT buffer overflow on cheap printers
+const CHUNK_SIZE = 512;   // bytes — prevents BT buffer overflow on cheap printers
 const CHUNK_DELAY_MS = 30;    // ms between chunks
-const RETRY_LIMIT    = 2;
+const RETRY_LIMIT = 2;
 
 /**
  * Splits a raw ESC/POS string into `CHUNK_SIZE`-byte segments and sends each
  * one with a short delay to avoid overflowing the printer's 4 KB BT buffer.
  */
 async function sendChunked(rawStr) {
-  for (let offset = 0; offset < rawStr.length; offset += CHUNK_SIZE) {
-    const chunk = rawStr.slice(offset, offset + CHUNK_SIZE);
-    await BluetoothEscposPrinter.printerWriteText(chunk);
-    await new Promise((r) => setTimeout(r, CHUNK_DELAY_MS));
-  }
+  // Simple base64 encoder for binary strings
+  const b64chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+  const toBase64 = (str) => {
+    let result = '';
+    let i = 0;
+    while (i < str.length) {
+      const c1 = str.charCodeAt(i++) & 0xff;
+      const c2 = i < str.length ? str.charCodeAt(i++) & 0xff : NaN;
+      const c3 = i < str.length ? str.charCodeAt(i++) & 0xff : NaN;
+      result += b64chars.charAt(c1 >> 2);
+      result += b64chars.charAt(((c1 & 0x3) << 4) | (isNaN(c2) ? 0 : c2 >> 4));
+      result += isNaN(c2) ? '=' : b64chars.charAt(((c2 & 0xf) << 2) | (isNaN(c3) ? 0 : c3 >> 6));
+      result += isNaN(c3) ? '=' : b64chars.charAt(c3 & 0x3f);
+    }
+    return result;
+  };
+
+  const base64Data = toBase64(rawStr);
+  await BluetoothEscposPrinter.printRawData(base64Data);
 }
 
 /**
@@ -470,7 +490,7 @@ export async function printRaw(rawEscPos, macAddress, deviceName = 'Printer') {
       if (!ok) {
         return {
           success: false,
-          error : 'Could not connect to printer. Check that it is powered on and paired.',
+          error: 'Could not connect to printer. Check that it is powered on and paired.',
         };
       }
     }
@@ -519,4 +539,26 @@ function classifyError(err) {
     return 'Connection timed out. Move the tablet closer to the printer.';
   }
   return `Printer error: ${err?.message || err}`;
+}
+
+/**
+ * Prints a Base64 encoded image.
+ * @param {string} base64 - Base64 string of the image (without data:image/png;base64, prefix)
+ * @param {object} options - { width: number, left: number }
+ */
+export async function printImageBase64(base64, options = { width: 384, left: 0 }) {
+  try {
+    // Ensure we are connected
+    const state = getPrinterState();
+    if (!state.isConnected) {
+      // If you have a default MAC stored, you could auto-reconnect here
+      return { success: false, error: 'Printer not connected' };
+    }
+
+    await BluetoothEscposPrinter.printPic(base64, options);
+    return { success: true };
+  } catch (err) {
+    console.error('[BTPrinter] printImage error:', err);
+    return { success: false, error: err.message || 'Image print failed' };
+  }
 }

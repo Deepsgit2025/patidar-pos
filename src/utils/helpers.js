@@ -31,15 +31,22 @@ export const scKey = (id) => `${id}__sc`;
 export const isScKey = (k) => k.endsWith("__sc");
 export const baseId = (k) => isScKey(k) ? k.slice(0, -4) : k;
 
-export function calcAmt(item, entry) {
+export function calcAmt(item, entry, scPrice = SC_PRICE) {
   if (!item) {
     // Handle custom items
     return (entry.rate || 0) * (entry.qty || 1);
   }
+  
+  const unitPrice = entry.rate !== undefined 
+    ? entry.rate 
+    : (item.price + (entry.isSC ? scPrice : 0));
+
+
   if (item.byWeight) {
     const g = parseFloat(entry.grams) || 0;
-    return item.per === 100 ? (item.price / 100) * g : (item.price / 1000) * g;
+    return item.per === 100 ? (unitPrice / 100) * g : (unitPrice / 1000) * g;
   }
-  const unitPrice = item.price + (entry.isSC ? SC_PRICE : 0);
+  
   return unitPrice * (entry.qty || 1);
 }
+
