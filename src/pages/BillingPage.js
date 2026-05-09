@@ -17,7 +17,7 @@ const SLIP_ITEMS = ['kachori', 'samosa', 'poha', 'jalebi', 'imarti', 'lassi', 'c
 
 const DEFAULT_SHOP = "default";
 
-const BillingPage = forwardRef(({ isLight, appStyles, onDeleteCategory }, ref) => {
+const BillingPage = forwardRef(({ isLight, appStyles, onDeleteCategory, categories: propsCategories }, ref) => {
   const viewShotRef = useRef();
   const kotShotRef = useRef();
   const styles = getStyles(isLight);
@@ -28,7 +28,8 @@ const BillingPage = forwardRef(({ isLight, appStyles, onDeleteCategory }, ref) =
   const [orders, setOrders] = useState([]);
   const [printingKOTCat, setPrintingKOTCat] = useState(null);
   const [billExpanded, setBillExpanded] = useState(false);
-  const [categories, setCategories] = useState(MENU);
+  const [categories, setCategories] = useState(propsCategories || MENU);
+  const jumpbarRef = useRef(null);
   const [scPrice, setScPrice] = useState(SC_PRICE);
   const [editingItem, setEditingItem] = useState(null); // cartKey
 
@@ -105,6 +106,7 @@ const BillingPage = forwardRef(({ isLight, appStyles, onDeleteCategory }, ref) =
   };
 
   useImperativeHandle(ref, () => ({
+    scrollTo,
     addCustomItem: (item) => {
       const customKey = `custom_${Date.now()}`;
       setCart(prev => ({
@@ -113,7 +115,8 @@ const BillingPage = forwardRef(({ isLight, appStyles, onDeleteCategory }, ref) =
           qty: item.qty,
           rate: item.rate,
           name: item.name,
-          isCustom: true
+          isCustom: true,
+          isSC: item.isSC
         }
       }));
     }
@@ -126,7 +129,9 @@ const BillingPage = forwardRef(({ isLight, appStyles, onDeleteCategory }, ref) =
       const savedSC = await loadAsync("sc_price", SC_PRICE);
       
       const savedCats = await loadAsync("menu_categories", null);
-      if (savedCats) {
+      if (propsCategories) {
+        setCategories(propsCategories);
+      } else if (savedCats) {
         // Sync items from MENU into the saved category order
         const merged = savedCats.map(sc => {
           const found = MENU.find(m => m.id === sc.id);
@@ -143,7 +148,16 @@ const BillingPage = forwardRef(({ isLight, appStyles, onDeleteCategory }, ref) =
       setCart({});
     };
     fetchInitData();
-  }, []);
+    
+    // Auto-scroll jumpbar to end if categories increased
+    if (propsCategories && propsCategories.length > categories.length) {
+      setTimeout(() => {
+        if (jumpbarRef.current) {
+          jumpbarRef.current.scrollToEnd({ animated: true });
+        }
+      }, 500);
+    }
+  }, [propsCategories]);
 
   const moveCategory = async (index, direction) => {
     const newCats = [...categories];
@@ -257,19 +271,7 @@ const BillingPage = forwardRef(({ isLight, appStyles, onDeleteCategory }, ref) =
 
   const total = cartEntries.reduce((s, e) => s + e.amount, 0);
 
-  const handleQuickAdd = (item) => {
-    // Create a custom item entry
-    const customKey = `custom_${Date.now()}`;
-    setCart(prev => ({
-      ...prev,
-      [customKey]: {
-        qty: item.qty,
-        rate: item.rate,
-        name: item.name,
-        isCustom: true
-      }
-    }));
-  };
+
 
   const isSlipItem = (itemId) => {
     if (!itemId) return false;
@@ -461,13 +463,19 @@ const BillingPage = forwardRef(({ isLight, appStyles, onDeleteCategory }, ref) =
     <View style={styles.layout}>
       {/* ── MENUPANEL (LEFT) ── */}
       <View style={styles.menuPanel}>
-        <View style={styles.jumpbar}>
+        <ScrollView 
+          ref={jumpbarRef}
+          horizontal 
+          showsHorizontalScrollIndicator={false} 
+          style={styles.jumpbar}
+          contentContainerStyle={styles.jumpbarContent}
+        >
           {categories.map(cat => (
             <TouchableOpacity key={cat.id} style={styles.jumpBtn} onPress={() => scrollTo(cat.id)}>
               <Text style={styles.jumpBtnText}>{cat.emoji} {cat.label}</Text>
             </TouchableOpacity>
           ))}
-        </View>
+        </ScrollView>
 
         <ScrollView ref={scrollViewRef} style={styles.menuScroll} contentContainerStyle={styles.menuScrollContent}>
           {categories.map((cat, idx) => (
@@ -688,7 +696,10 @@ const BillingPage = forwardRef(({ isLight, appStyles, onDeleteCategory }, ref) =
               marginBottom: 0 
             }]}>{appStyles?.shopName || 'Patidar Restaurant'}</Text>
             <View style={[styles.hrMetaRow, { marginBottom: 2 }]}>
-              <Text style={[styles.hrMetaText, { fontSize: appStyles?.billMetaSize || 22 }]}>
+              <Text style={[styles.hrMetaText, { 
+                fontSize: appStyles?.billMetaSize || 22,
+                fontWeight: appStyles?.billMetaWeight || '400'
+              }]}>
                 Gautampura | {fmtDate(new Date())} {fmtTime(new Date())}
               </Text>
             </View>
@@ -747,7 +758,7 @@ const BillingPage = forwardRef(({ isLight, appStyles, onDeleteCategory }, ref) =
             <Text style={[styles.hrTotalVal, { fontSize: appStyles?.billTotalSize || 60 }]}>₹{total.toFixed(0)}</Text>
           </View>
           <View style={styles.hrDivider} />
-          <Text style={styles.hrThanks}>🙏 Thank You! Visit Again 🙏</Text>
+          <Text style={[styles.hrThanks, { fontSize: appStyles?.billThanksSize || 26 }]}>🙏 Thank You! Visit Again 🙏</Text>
         </ViewShot>
 
         <ViewShot
@@ -834,12 +845,15 @@ const getStyles = (isLight) => StyleSheet.create({
   },
 
   jumpbar: {
-    flexDirection: "row",
     paddingVertical: isTablet ? 14 : 10,
-    paddingHorizontal: isTablet ? 18 : 10,
     backgroundColor: isLight ? "#FFFFFF" : "rgba(0, 0, 0, 0.85)",
     borderBottomWidth: 1,
     borderBottomColor: isLight ? "rgba(0,0,0,0.1)" : "rgba(77, 72, 69, 0.15)",
+    maxHeight: isTablet ? 80 : 60,
+  },
+  jumpbarContent: {
+    paddingHorizontal: isTablet ? 18 : 10,
+    alignItems: 'center',
   },
 
   jumpBtn: {

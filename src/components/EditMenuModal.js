@@ -9,6 +9,7 @@ const isTablet = width > 600;
 export default function EditMenuModal({ visible, onClose, onUpdate, onDelete }) {
   const [selectedItemId, setSelectedItemId] = useState("");
   const [rate, setRate] = useState("");
+  const [withSevChutney, setWithSevChutney] = useState(false);
 
   // Populate all available items for the picker
   const allItems = [];
@@ -22,8 +23,10 @@ export default function EditMenuModal({ visible, onClose, onUpdate, onDelete }) 
   useEffect(() => {
     if (selectedItemId && ITEM_MAP[selectedItemId]) {
       setRate(ITEM_MAP[selectedItemId].price.toString());
+      setWithSevChutney(!!ITEM_MAP[selectedItemId].withSevChutney);
     } else {
       setRate("");
+      setWithSevChutney(false);
     }
   }, [selectedItemId]);
 
@@ -38,8 +41,8 @@ export default function EditMenuModal({ visible, onClose, onUpdate, onDelete }) 
     if (!selectedItemId) return alert("Please select an item");
     if (!rate.trim()) return alert("Rate cannot be empty");
     
-    onUpdate(selectedItemId, parseFloat(rate));
-    Alert.alert("Success", "Item rate updated successfully!");
+    onUpdate(selectedItemId, parseFloat(rate), withSevChutney);
+    Alert.alert("Success", "Item updated successfully!");
     onClose();
   };
 
@@ -108,6 +111,13 @@ export default function EditMenuModal({ visible, onClose, onUpdate, onDelete }) 
               />
             </View>
 
+            <TouchableOpacity style={styles.toggleRow} onPress={() => setWithSevChutney(!withSevChutney)}>
+              <View style={[styles.checkbox, withSevChutney && styles.checkboxActive]}>
+                {withSevChutney && <Text style={styles.checkIcon}>✓</Text>}
+              </View>
+              <Text style={styles.toggleLabel}>Enable Sev Chutney option?</Text>
+            </TouchableOpacity>
+
             <View style={styles.actions}>
               <TouchableOpacity style={[styles.btn, styles.btnCancel]} onPress={onClose}>
                 <Text style={styles.btnCancelText}>Cancel</Text>
@@ -145,5 +155,10 @@ const styles = StyleSheet.create({
   btnDelete: { backgroundColor: "#EF4444" },
   btnDeleteText: { color: "#FFF", fontWeight: "700", fontSize: 14 },
   btnUpdate: { backgroundColor: "#3B82F6" },
-  btnUpdateText: { color: "#FFF", fontWeight: "800", fontSize: 14 }
+  btnUpdateText: { color: "#FFF", fontWeight: "800", fontSize: 14 },
+  toggleRow: { flexDirection: "row", alignItems: "center", marginTop: 16, marginBottom: 8, gap: 12 },
+  checkbox: { width: 24, height: 24, borderRadius: 6, borderWidth: 2, borderColor: "#3B82F6", alignItems: "center", justifyContent: "center" },
+  checkboxActive: { backgroundColor: "#3B82F6" },
+  checkIcon: { color: "#FFF", fontWeight: "900", fontSize: 14 },
+  toggleLabel: { color: "#374151", fontSize: 14, fontWeight: "600" },
 });

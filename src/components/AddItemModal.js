@@ -1,187 +1,273 @@
-import React, { useState } from 'react';
-import { View, Text, Modal, TextInput, TouchableOpacity, StyleSheet, Dimensions, KeyboardAvoidingView, Platform, ScrollView, Image } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import {
+  View,
+  Text,
+  Modal,
+  TextInput,
+  TouchableOpacity,
+  StyleSheet,
+  Dimensions,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  Image,
+  Alert,
+  ActivityIndicator
+} from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
-import { MENU } from '../constants/menu';
+import { Picker } from '@react-native-picker/picker';
 
-const { width } = Dimensions.get('window');
+const { width, height } = Dimensions.get('window');
 const isTablet = width > 600;
 
-const EMOJIS = ["✨", "🍲", "🍬", "🥨", "🥤", "🍰", "🍛", "🍦", "🥪", "🍕", "🍔", "🍿", "🍩"];
-
-export default function AddItemModal({ visible, onClose, onAdd }) {
+export default function AddItemModal({ visible, onClose, categories, onSave }) {
   const [name, setName] = useState("");
-  const [price, setPrice] = useState("");
-  const [category, setCategory] = useState(MENU[0].id);
+  const [selectedCategoryId, setSelectedCategoryId] = useState("");
   const [newCategoryName, setNewCategoryName] = useState("");
-  const [newCategoryEmoji, setNewCategoryEmoji] = useState(EMOJIS[0]);
-  const [byWeight, setByWeight] = useState(false);
-  const [photoUrl, setPhotoUrl] = useState("");
+  const [isAddingCategory, setIsAddingCategory] = useState(false);
+  const [price, setPrice] = useState("");
+  const [unit, setUnit] = useState("kg"); // kg or pc
   const [withSevChutney, setWithSevChutney] = useState(false);
+  const [image, setImage] = useState(null);
+  const [loading, setLoading] = useState(false);
+
+  // Reset form when modal opens
+  useEffect(() => {
+    if (visible) {
+      setName("");
+      setPrice("");
+      setUnit("kg");
+      setWithSevChutney(false);
+      setImage(null);
+      setIsAddingCategory(false);
+      setNewCategoryName("");
+      if (categories && categories.length > 0) {
+        setSelectedCategoryId(categories[0].id);
+      }
+    }
+  }, [visible]);
 
   const pickImage = async () => {
-    let result = await ImagePicker.launchImageLibraryAsync({
+    const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
       allowsEditing: true,
       aspect: [4, 3],
-      quality: 0.5,
-      base64: true,
+      quality: 0.8,
     });
 
-    if (!result.canceled && result.assets && result.assets.length > 0) {
-      const asset = result.assets[0];
-      if (asset.base64) {
-        setPhotoUrl(`data:image/jpeg;base64,${asset.base64}`);
-      } else {
-        setPhotoUrl(asset.uri);
-      }
+    if (!result.canceled) {
+      setImage(result.assets[0].uri);
     }
   };
 
-  const handleAdd = () => {
-    if (!name.trim()) {
-      alert("Item Name is required!");
-      return;
-    }
-    if (!price.trim() || isNaN(parseFloat(price))) {
-      alert("Please enter a valid Price!");
-      return;
-    }
+  const handleSave = () => {
+    if (!name.trim()) return Alert.alert("Error", "Item Name is required");
+    if (!selectedCategoryId && !isAddingCategory) return Alert.alert("Error", "Please select a category");
+    if (isAddingCategory && !newCategoryName.trim()) return Alert.alert("Error", "Category name cannot be empty");
+    if (!price.trim()) return Alert.alert("Error", "Price is required");
 
-    const newItem = {
-      id: "custom_" + Date.now(),
+    const itemData = {
+      id: name.toLowerCase().replace(/\s+/g, '_') + '_' + Date.now(),
       name: name.trim(),
       price: parseFloat(price),
-      byWeight: byWeight,
-      withSevChutney: withSevChutney,
-      unit: byWeight ? "kg" : "pc",
-      img: photoUrl.trim() || "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=300&q=80"
+      unit: unit === "kg" ? "kg" : "pc",
+      byWeight: unit === "kg",
+      withSevChutney,
+      img: image,
+      categoryName: isAddingCategory ? newCategoryName.trim() : null,
+      categoryId: isAddingCategory ? null : selectedCategoryId
     };
 
-    let finalCategoryId = category;
-    if (category === 'new') {
-      if (!newCategoryName.trim()) {
-        alert("Please enter a name for the new category.");
-        return;
-      }
-      finalCategoryId = newCategoryName.trim();
-      // We pass the emoji as part of the category ID if it's new? 
-      // Actually, addCustomMenuItem in constants/menu.js only takes categoryId.
-      // I should update it to take emoji too.
-    }
-
-    onAdd(newItem, finalCategoryId, newCategoryEmoji);
-
-    setName("");
-    setPrice("");
-    setByWeight(false);
-    setWithSevChutney(false);
-    setPhotoUrl("");
-    setNewCategoryName("");
-    setCategory(MENU[0].id);
-    onClose();
+    onSave(itemData);
   };
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+    <Modal 
+      visible={visible} 
+      transparent 
+      animationType="slide" 
+      onRequestClose={onClose}
+    >
       <View style={styles.overlay}>
-        <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={styles.center}>
+        <KeyboardAvoidingView 
+          behavior={Platform.OS === "ios" ? "padding" : "height"} 
+          style={styles.container}
+        >
           <View style={styles.modal}>
-            <ScrollView showsVerticalScrollIndicator={false}>
-              <Text style={styles.title}>Add New Menu Item</Text>
+            <View style={styles.header}>
+              <Text style={styles.title}>Add New Item</Text>
+              <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
+                <Text style={styles.closeBtnText}>×</Text>
+              </TouchableOpacity>
+            </View>
 
+            <ScrollView style={styles.form} showsVerticalScrollIndicator={false}>
+              {/* Item Name */}
               <View style={styles.field}>
                 <Text style={styles.label}>Item Name *</Text>
-                <TextInput style={styles.input} placeholder="e.g. Paneer Tikka" value={name} onChangeText={setName} placeholderTextColor="#888" />
+                <TextInput
+                  style={styles.input}
+                  placeholder="e.g. Special Samosa"
+                  placeholderTextColor="#888"
+                  value={name}
+                  onChangeText={setName}
+                />
               </View>
 
+              {/* Category Selection */}
               <View style={styles.field}>
-                <Text style={styles.label}>Price / Rate *</Text>
-                <TextInput style={styles.input} placeholder="e.g. 150" keyboardType="decimal-pad" value={price} onChangeText={setPrice} placeholderTextColor="#888" />
-              </View>
-
-              <View style={styles.field}>
-                <Text style={styles.label}>Category</Text>
-                <View style={styles.chipRow}>
-                  {MENU.map(cat => (
-                    <TouchableOpacity key={cat.id} style={[styles.chip, category === cat.id && styles.chipActive]} onPress={() => setCategory(cat.id)}>
-                      <Text style={[styles.chipText, category === cat.id && styles.chipTextActive]}>{cat.emoji} {cat.label}</Text>
+                <Text style={styles.label}>Category *</Text>
+                {!isAddingCategory ? (
+                  <>
+                    <View style={styles.pickerContainer}>
+                      <Picker
+                        selectedValue={selectedCategoryId}
+                        onValueChange={(val) => setSelectedCategoryId(val)}
+                        style={styles.picker}
+                      >
+                        {categories.map(cat => (
+                          <Picker.Item key={cat.id} label={`${cat.emoji} ${cat.label}`} value={cat.id} />
+                        ))}
+                      </Picker>
+                    </View>
+                    <TouchableOpacity 
+                      style={styles.addCatBtn} 
+                      onPress={() => setIsAddingCategory(true)}
+                    >
+                      <Text style={styles.addCatBtnText}>+ Add New Category</Text>
                     </TouchableOpacity>
-                  ))}
-                  <TouchableOpacity style={[styles.chip, category === 'new' && styles.chipActive]} onPress={() => setCategory('new')}>
-                    <Text style={[styles.chipText, category === 'new' && styles.chipTextActive]}>+ New Category</Text>
-                  </TouchableOpacity>
-                </View>
-                
-                {category === 'new' && (
-                  <View style={{ marginTop: 12, backgroundColor: 'rgba(0,0,0,0.03)', padding: 12, borderRadius: 16, borderWidth: 1, borderColor: 'rgba(0,0,0,0.1)' }}>
-                    <Text style={[styles.label, { fontSize: 10 }]}>Category Details</Text>
+                  </>
+                ) : (
+                  <View style={styles.newCatRow}>
                     <TextInput
-                      style={[styles.input, { marginBottom: 10 }]}
-                      placeholder="Category name (e.g. Pizza)"
+                      style={[styles.input, { flex: 1 }]}
+                      placeholder="e.g. New Category"
+                      placeholderTextColor="#888"
                       value={newCategoryName}
                       onChangeText={setNewCategoryName}
-                      placeholderTextColor="#888"
+                      autoFocus
                     />
-                    <Text style={[styles.label, { fontSize: 10 }]}>Select Emoji</Text>
-                    <View style={styles.emojiRow}>
-                      {EMOJIS.map(e => (
-                        <TouchableOpacity key={e} style={[styles.emojiBtn, newCategoryEmoji === e && styles.emojiActive]} onPress={() => setNewCategoryEmoji(e)}>
-                          <Text style={{ fontSize: 20 }}>{e}</Text>
-                        </TouchableOpacity>
-                      ))}
-                    </View>
+                    <TouchableOpacity 
+                      style={styles.confirmCatBtn}
+                      onPress={() => {
+                        if (newCategoryName.trim()) {
+                          // The actual category creation happens on save, 
+                          // but we "confirm" it here in the UI state
+                          setIsAddingCategory(false);
+                          // We'll show the new name in the dropdown area or just keep it selected
+                        } else {
+                          Alert.alert("Error", "Please enter a category name");
+                        }
+                      }}
+                    >
+                      <Text style={styles.confirmCatBtnText}>Add</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity 
+                      style={styles.cancelCatBtn}
+                      onPress={() => {
+                        setIsAddingCategory(false);
+                        setNewCategoryName("");
+                      }}
+                    >
+                      <Text style={styles.cancelCatBtnText}>✕</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+                {isAddingCategory === false && newCategoryName.trim() !== "" && (
+                  <View style={styles.selectedNewCat}>
+                    <Text style={styles.selectedNewCatText}>Selected: {newCategoryName}</Text>
+                    <TouchableOpacity onPress={() => setNewCategoryName("")}>
+                      <Text style={styles.removeNewCat}>Remove</Text>
+                    </TouchableOpacity>
                   </View>
                 )}
               </View>
 
+              {/* Price */}
               <View style={styles.field}>
-                <Text style={styles.label}>Selling Type</Text>
-                <View style={styles.chipRow}>
-                  <TouchableOpacity style={[styles.chip, !byWeight && styles.chipActive]} onPress={() => setByWeight(false)}>
-                    <Text style={[styles.chipText, !byWeight && styles.chipTextActive]}>Quantity (pcs)</Text>
+                <Text style={styles.label}>Price (₹) *</Text>
+                <View style={styles.priceInputContainer}>
+                  <Text style={styles.currencyPrefix}>₹</Text>
+                  <TextInput
+                    style={styles.priceInput}
+                    placeholder="0.00"
+                    placeholderTextColor="#888"
+                    keyboardType="decimal-pad"
+                    value={price}
+                    onChangeText={setPrice}
+                  />
+                </View>
+              </View>
+
+              {/* Sold By (Unit) */}
+              <View style={styles.field}>
+                <Text style={styles.label}>Sold By</Text>
+                <View style={styles.toggleGroup}>
+                  <TouchableOpacity 
+                    style={[styles.toggleBtn, unit === "kg" && styles.toggleBtnActive]}
+                    onPress={() => setUnit("kg")}
+                  >
+                    <Text style={[styles.toggleText, unit === "kg" && styles.toggleTextActive]}>kg (Kilogram)</Text>
                   </TouchableOpacity>
-                  <TouchableOpacity style={[styles.chip, byWeight && styles.chipActive]} onPress={() => setByWeight(true)}>
-                    <Text style={[styles.chipText, byWeight && styles.chipTextActive]}>Weight (kg/g)</Text>
+                  <TouchableOpacity 
+                    style={[styles.toggleBtn, unit === "pc" && styles.toggleBtnActive]}
+                    onPress={() => setUnit("pc")}
+                  >
+                    <Text style={[styles.toggleText, unit === "pc" && styles.toggleTextActive]}>pcs (Pieces)</Text>
                   </TouchableOpacity>
                 </View>
               </View>
 
+              {/* Sev & Chutney */}
               <View style={styles.field}>
-                <Text style={styles.label}>Ask for Sev Chutney?</Text>
-                <View style={styles.chipRow}>
-                  <TouchableOpacity style={[styles.chip, !withSevChutney && styles.chipActive]} onPress={() => setWithSevChutney(false)}>
-                    <Text style={[styles.chipText, !withSevChutney && styles.chipTextActive]}>No</Text>
+                <Text style={styles.label}>Sev & Chutney Option</Text>
+                <View style={styles.toggleGroup}>
+                  <TouchableOpacity 
+                    style={[styles.toggleBtn, !withSevChutney && styles.toggleBtnActive]}
+                    onPress={() => setWithSevChutney(false)}
+                  >
+                    <Text style={[styles.toggleText, !withSevChutney && styles.toggleTextActive]}>No</Text>
                   </TouchableOpacity>
-                  <TouchableOpacity style={[styles.chip, withSevChutney && styles.chipActive]} onPress={() => setWithSevChutney(true)}>
-                    <Text style={[styles.chipText, withSevChutney && styles.chipTextActive]}>Yes</Text>
+                  <TouchableOpacity 
+                    style={[styles.toggleBtn, withSevChutney && styles.toggleBtnActive]}
+                    onPress={() => setWithSevChutney(true)}
+                  >
+                    <Text style={[styles.toggleText, withSevChutney && styles.toggleTextActive]}>Yes</Text>
                   </TouchableOpacity>
                 </View>
               </View>
 
+              {/* Item Photo */}
               <View style={styles.field}>
-                <Text style={styles.label}>Photo (Optional)</Text>
-                <View style={{ flexDirection: 'row', gap: 10 }}>
-                  <TextInput style={[styles.input, { flex: 1 }]} placeholder="URL or Pick Image..." value={photoUrl} onChangeText={setPhotoUrl} placeholderTextColor="#888" />
-                  <TouchableOpacity style={styles.imageBtn} onPress={pickImage}>
-                    <Text style={styles.imageBtnText}>🖼 Pick</Text>
-                  </TouchableOpacity>
-                </View>
-                {photoUrl ? (
-                  <View style={{ marginTop: 10, borderRadius: 12, overflow: 'hidden', height: 100, width: 100, backgroundColor: 'rgba(0,0,0,0.05)' }}>
-                    <Image source={{ uri: photoUrl }} style={{ width: '100%', height: '100%' }} />
-                  </View>
-                ) : null}
-              </View>
-
-              <View style={styles.actions}>
-                <TouchableOpacity style={[styles.btn, styles.btnCancel]} onPress={onClose}>
-                  <Text style={styles.btnCancelText}>Cancel</Text>
+                <Text style={styles.label}>Item Photo (Optional)</Text>
+                <TouchableOpacity style={styles.imagePicker} onPress={pickImage}>
+                  {image ? (
+                    <View style={styles.previewContainer}>
+                      <Image source={{ uri: image }} style={styles.preview} />
+                      <View style={styles.changeBadge}>
+                        <Text style={styles.changeBadgeText}>Change Photo</Text>
+                      </View>
+                    </View>
+                  ) : (
+                    <View style={styles.placeholder}>
+                      <Text style={styles.placeholderIcon}>📸</Text>
+                      <Text style={styles.placeholderText}>Browse local storage</Text>
+                    </View>
+                  )}
                 </TouchableOpacity>
-                <TouchableOpacity style={[styles.btn, styles.btnAdd]} onPress={handleAdd}>
-                  <Text style={styles.btnAddText}>Save Item</Text>
-                </TouchableOpacity>
               </View>
+              
+              <View style={{ height: 40 }} />
             </ScrollView>
+
+            <View style={styles.footer}>
+              <TouchableOpacity style={styles.cancelBtn} onPress={onClose}>
+                <Text style={styles.cancelBtnText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.saveBtn} onPress={handleSave}>
+                <Text style={styles.saveBtnText}>Save Item</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </KeyboardAvoidingView>
       </View>
@@ -190,27 +276,271 @@ export default function AddItemModal({ visible, onClose, onAdd }) {
 }
 
 const styles = StyleSheet.create({
-  overlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.7)", justifyContent: "center", alignItems: "center" },
-  center: { justifyContent: "center", alignItems: "center", width: "100%", padding: 20 },
-  modal: { backgroundColor: "#fff", borderRadius: 24, padding: isTablet ? 32 : 24, width: isTablet ? 450 : "100%", maxHeight: "90%", shadowColor: "#000", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 12, elevation: 10 },
-  title: { fontSize: 22, fontWeight: "800", color: "#000", marginBottom: 20, textAlign: "center" },
-  field: { marginBottom: 16 },
-  label: { fontSize: 12, fontWeight: "600", color: "rgba(0,0,0,0.8)", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.5 },
-  input: { backgroundColor: "rgba(0,0,0,0.05)", borderWidth: 1, borderColor: "rgba(0,0,0,0.15)", borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, fontSize: 16, color: "#000", fontWeight: "500" },
-  chipRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  chip: { paddingVertical: 8, paddingHorizontal: 14, borderRadius: 20, backgroundColor: "rgba(0,0,0,0.05)", borderWidth: 1, borderColor: "rgba(0,0,0,0.1)" },
-  chipActive: { backgroundColor: "#000", borderColor: "#000" },
-  chipText: { color: "rgba(0,0,0,0.6)", fontWeight: "600", fontSize: 14 },
-  chipTextActive: { color: "#fff" },
-  emojiRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 4 },
-  emojiBtn: { padding: 8, borderRadius: 12, backgroundColor: '#fff', borderWidth: 1, borderColor: 'rgba(0,0,0,0.05)' },
-  emojiActive: { backgroundColor: '#FFC300', borderColor: '#000' },
-  imageBtn: { backgroundColor: "rgba(0,0,0,0.05)", borderWidth: 1, borderColor: "rgba(0,0,0,0.15)", borderRadius: 12, alignItems: "center", justifyContent: "center", paddingHorizontal: 16 },
-  imageBtnText: { fontSize: 16, fontWeight: '600', color: "rgba(0,0,0,0.8)" },
-  actions: { flexDirection: "row", gap: 12, marginTop: 24 },
-  btn: { flex: 1, paddingVertical: 14, borderRadius: 12, alignItems: "center", justifyContent: "center" },
-  btnCancel: { backgroundColor: "rgba(0,0,0,0.1)" },
-  btnCancelText: { color: "rgba(0,0,0,0.7)", fontWeight: "600", fontSize: 15 },
-  btnAdd: { backgroundColor: "#FFC300" },
-  btnAddText: { color: "#000", fontWeight: "800", fontSize: 15 }
+  overlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.85)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  container: {
+    width: "100%",
+    height: Platform.OS === 'web' ? '90%' : '100%',
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  modal: {
+    backgroundColor: "#1A1D23",
+    borderRadius: isTablet ? 32 : 0,
+    width: isTablet ? 600 : "100%",
+    height: isTablet ? "auto" : "100%",
+    maxHeight: isTablet ? "90%" : "100%",
+    overflow: "hidden",
+    borderWidth: isTablet ? 1 : 0,
+    borderColor: "rgba(255,255,255,0.1)",
+  },
+  header: {
+    padding: 24,
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(255,255,255,0.05)",
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    backgroundColor: "#1A1D23",
+  },
+  title: {
+    fontSize: 24,
+    fontWeight: "900",
+    color: "#FFFFFF",
+    letterSpacing: 0.5,
+  },
+  closeBtn: {
+    padding: 8,
+  },
+  closeBtnText: {
+    fontSize: 32,
+    color: "rgba(255,255,255,0.4)",
+    fontWeight: "300",
+  },
+  form: {
+    padding: 24,
+  },
+  field: {
+    marginBottom: 24,
+  },
+  label: {
+    fontSize: 12,
+    fontWeight: "800",
+    color: "#E8730A",
+    textTransform: "uppercase",
+    letterSpacing: 1.5,
+    marginBottom: 10,
+  },
+  input: {
+    backgroundColor: "rgba(255,255,255,0.04)",
+    borderRadius: 16,
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    fontSize: 16,
+    color: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+  },
+  pickerContainer: {
+    backgroundColor: "rgba(255,255,255,0.04)",
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+    overflow: "hidden",
+  },
+  picker: {
+    color: "#FFFFFF",
+    height: 60,
+  },
+  addCatBtn: {
+    marginTop: 10,
+    alignSelf: "flex-start",
+  },
+  addCatBtnText: {
+    color: "#E8730A",
+    fontWeight: "700",
+    fontSize: 14,
+  },
+  newCatRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  cancelCatBtn: {
+    padding: 10,
+  },
+  cancelCatBtnText: {
+    color: "rgba(255,255,255,0.4)",
+    fontWeight: "600",
+    fontSize: 18,
+  },
+  confirmCatBtn: {
+    backgroundColor: "#E8730A",
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+  },
+  confirmCatBtnText: {
+    color: "#FFFFFF",
+    fontWeight: "700",
+    fontSize: 14,
+  },
+  selectedNewCat: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: 'rgba(232, 115, 10, 0.1)',
+    padding: 12,
+    borderRadius: 12,
+    marginTop: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(232, 115, 10, 0.3)',
+  },
+  selectedNewCatText: {
+    color: '#FFFFFF',
+    fontWeight: '600',
+    fontSize: 14,
+  },
+  removeNewCat: {
+    color: '#EF4444',
+    fontWeight: '700',
+    fontSize: 12,
+  },
+  priceInputContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "rgba(255,255,255,0.04)",
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+    paddingHorizontal: 20,
+  },
+  currencyPrefix: {
+    fontSize: 18,
+    color: "#E8730A",
+    fontWeight: "800",
+    marginRight: 10,
+  },
+  priceInput: {
+    flex: 1,
+    paddingVertical: 16,
+    fontSize: 18,
+    color: "#FFFFFF",
+    fontWeight: "600",
+  },
+  toggleGroup: {
+    flexDirection: "row",
+    gap: 12,
+  },
+  toggleBtn: {
+    flex: 1,
+    backgroundColor: "rgba(255,255,255,0.04)",
+    borderRadius: 14,
+    paddingVertical: 14,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+  },
+  toggleBtnActive: {
+    backgroundColor: "rgba(232, 115, 10, 0.15)",
+    borderColor: "#E8730A",
+  },
+  toggleText: {
+    color: "rgba(255,255,255,0.4)",
+    fontWeight: "700",
+    fontSize: 14,
+  },
+  toggleTextActive: {
+    color: "#FFFFFF",
+  },
+  imagePicker: {
+    height: 180,
+    backgroundColor: "rgba(255,255,255,0.02)",
+    borderRadius: 20,
+    borderWidth: 2,
+    borderStyle: "dashed",
+    borderColor: "rgba(255,255,255,0.1)",
+    justifyContent: "center",
+    alignItems: "center",
+    overflow: "hidden",
+  },
+  placeholder: {
+    alignItems: "center",
+  },
+  placeholderIcon: {
+    fontSize: 40,
+    marginBottom: 8,
+  },
+  placeholderText: {
+    color: "rgba(255,255,255,0.3)",
+    fontWeight: "600",
+    fontSize: 14,
+  },
+  previewContainer: {
+    width: "100%",
+    height: "100%",
+    position: "relative",
+  },
+  preview: {
+    width: "100%",
+    height: "100%",
+    resizeMode: "cover",
+  },
+  changeBadge: {
+    position: "absolute",
+    bottom: 12,
+    right: 12,
+    backgroundColor: "rgba(0,0,0,0.6)",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  changeBadgeText: {
+    color: "#FFF",
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  footer: {
+    padding: 24,
+    flexDirection: "row",
+    gap: 16,
+    borderTopWidth: 1,
+    borderTopColor: "rgba(255,255,255,0.05)",
+    backgroundColor: "#1A1D23",
+  },
+  cancelBtn: {
+    flex: 1,
+    paddingVertical: 16,
+    borderRadius: 16,
+    alignItems: "center",
+    backgroundColor: "rgba(255,255,255,0.05)",
+  },
+  cancelBtnText: {
+    color: "rgba(255,255,255,0.6)",
+    fontWeight: "700",
+    fontSize: 16,
+  },
+  saveBtn: {
+    flex: 2,
+    paddingVertical: 16,
+    borderRadius: 16,
+    alignItems: "center",
+    backgroundColor: "#E8730A",
+    shadowColor: "#E8730A",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+    elevation: 8,
+  },
+  saveBtnText: {
+    color: "#FFFFFF",
+    fontWeight: "900",
+    fontSize: 16,
+    textTransform: "uppercase",
+    letterSpacing: 1,
+  },
 });

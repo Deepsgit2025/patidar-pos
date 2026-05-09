@@ -34,7 +34,9 @@ export const baseId = (k) => isScKey(k) ? k.slice(0, -4) : k;
 export function calcAmt(item, entry, scPrice = SC_PRICE) {
   if (!item) {
     // Handle custom items
-    return (entry.rate || 0) * (entry.qty || 1);
+    const baseRate = (entry.rate || 0);
+    const finalRate = entry.isSC ? baseRate + scPrice : baseRate;
+    return finalRate * (entry.qty || 1);
   }
   
   const unitPrice = entry.rate !== undefined 

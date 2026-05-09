@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, Modal, TouchableOpacity, StyleSheet, Dimensions, ScrollView, TextInput } from 'react-native';
+import { View, Text, Modal, TextInput, TouchableOpacity, StyleSheet, Dimensions, ScrollView } from 'react-native';
 import ItemCard from './ItemCard';
 
 const { width } = Dimensions.get('window');
@@ -14,9 +14,11 @@ const BTN_COLORS = [
   "#FFC300", "#34D399", "#FBBF24", "#60A5FA", "#F87171", "#A78BFA"
 ];
 
+const WEIGHTS = ['400', '700', '900'];
+
 export default function StylesModal({ visible, onClose, currentStyles, onSave }) {
   const [styles, setStyles] = useState(currentStyles);
-  const [activeTab, setActiveTab] = useState('card'); // 'card', 'bill', or 'kot'
+  const [activeTab, setActiveTab] = useState('card'); 
 
   useEffect(() => {
     if (visible) {
@@ -52,7 +54,7 @@ export default function StylesModal({ visible, onClose, currentStyles, onSave })
         ))}
       </View>
 
-      <Text style={uiStyles.label}>Border & Button Color</Text>
+      <Text style={uiStyles.label}>Theme Colors</Text>
       <View style={uiStyles.colorGrid}>
         {BTN_COLORS.map(c => (
           <TouchableOpacity key={c} style={[uiStyles.colorCircle, { backgroundColor: c }]} onPress={() => updateStyle('btnBg', c)} />
@@ -63,16 +65,16 @@ export default function StylesModal({ visible, onClose, currentStyles, onSave })
 
   const renderBillStyles = () => (
     <View>
-      <Text style={uiStyles.sectionTitle}>Shop Branding</Text>
+      <Text style={uiStyles.sectionTitle}>Branding</Text>
       <View style={uiStyles.field}>
-        <Text style={uiStyles.label}>Display Name on Bill</Text>
+        <Text style={uiStyles.label}>Restaurant Name</Text>
         <TextInput style={uiStyles.input} value={styles.shopName} onChangeText={(v) => updateStyle('shopName', v)} placeholder="Patidar Restaurant" placeholderTextColor="#666" />
       </View>
 
-      <Text style={uiStyles.sectionTitle}>Bill Font Sizes</Text>
+      <Text style={uiStyles.sectionTitle}>Header Settings</Text>
       <View style={uiStyles.styleRow}>
         <View style={{ flex: 1 }}>
-          <Text style={uiStyles.label}>Name Size</Text>
+          <Text style={uiStyles.label}>Shop Name Size</Text>
           <View style={uiStyles.stepper}>
             <TouchableOpacity style={uiStyles.stepBtn} onPress={() => adjustSize('billShopNameSize', -2)}><Text style={uiStyles.stepText}>-</Text></TouchableOpacity>
             <Text style={uiStyles.stepVal}>{styles.billShopNameSize}</Text>
@@ -82,7 +84,7 @@ export default function StylesModal({ visible, onClose, currentStyles, onSave })
         <View style={{ flex: 1 }}>
           <Text style={uiStyles.label}>Weight</Text>
           <View style={uiStyles.weightRow}>
-            {['400', '700', '900'].map(w => (
+            {WEIGHTS.map(w => (
               <TouchableOpacity key={w} style={[uiStyles.weightBtn, styles.billShopNameWeight === w && uiStyles.weightActive]} onPress={() => updateStyle('billShopNameWeight', w)}>
                 <Text style={[uiStyles.weightText, styles.billShopNameWeight === w && uiStyles.weightTextActive]}>{w}</Text>
               </TouchableOpacity>
@@ -93,7 +95,29 @@ export default function StylesModal({ visible, onClose, currentStyles, onSave })
 
       <View style={uiStyles.styleRow}>
         <View style={{ flex: 1 }}>
-          <Text style={uiStyles.label}>Items Size</Text>
+          <Text style={uiStyles.label}>Location/Time Size</Text>
+          <View style={uiStyles.stepper}>
+            <TouchableOpacity style={uiStyles.stepBtn} onPress={() => adjustSize('billMetaSize', -2)}><Text style={uiStyles.stepText}>-</Text></TouchableOpacity>
+            <Text style={uiStyles.stepVal}>{styles.billMetaSize}</Text>
+            <TouchableOpacity style={uiStyles.stepBtn} onPress={() => adjustSize('billMetaSize', 2)}><Text style={uiStyles.stepText}>+</Text></TouchableOpacity>
+          </View>
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={uiStyles.label}>Weight</Text>
+          <View style={uiStyles.weightRow}>
+            {WEIGHTS.map(w => (
+              <TouchableOpacity key={w} style={[uiStyles.weightBtn, styles.billMetaWeight === w && uiStyles.weightActive]} onPress={() => updateStyle('billMetaWeight', w)}>
+                <Text style={[uiStyles.weightText, styles.billMetaWeight === w && uiStyles.weightTextActive]}>{w}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+      </View>
+
+      <Text style={uiStyles.sectionTitle}>Table & Totals</Text>
+      <View style={uiStyles.styleRow}>
+        <View style={{ flex: 1 }}>
+          <Text style={uiStyles.label}>Item Rows Size</Text>
           <View style={uiStyles.stepper}>
             <TouchableOpacity style={uiStyles.stepBtn} onPress={() => adjustSize('billItemSize', -2)}><Text style={uiStyles.stepText}>-</Text></TouchableOpacity>
             <Text style={uiStyles.stepVal}>{styles.billItemSize}</Text>
@@ -101,11 +125,22 @@ export default function StylesModal({ visible, onClose, currentStyles, onSave })
           </View>
         </View>
         <View style={{ flex: 1 }}>
-          <Text style={uiStyles.label}>Total Size</Text>
+          <Text style={uiStyles.label}>Total Amount Size</Text>
           <View style={uiStyles.stepper}>
             <TouchableOpacity style={uiStyles.stepBtn} onPress={() => adjustSize('billTotalSize', -4)}><Text style={uiStyles.stepText}>-</Text></TouchableOpacity>
             <Text style={uiStyles.stepVal}>{styles.billTotalSize}</Text>
             <TouchableOpacity style={uiStyles.stepBtn} onPress={() => adjustSize('billTotalSize', 4)}><Text style={uiStyles.stepText}>+</Text></TouchableOpacity>
+          </View>
+        </View>
+      </View>
+
+      <View style={uiStyles.styleRow}>
+        <View style={{ flex: 1 }}>
+          <Text style={uiStyles.label}>'Visit Again' Size</Text>
+          <View style={uiStyles.stepper}>
+            <TouchableOpacity style={uiStyles.stepBtn} onPress={() => adjustSize('billThanksSize', -2)}><Text style={uiStyles.stepText}>-</Text></TouchableOpacity>
+            <Text style={uiStyles.stepVal}>{styles.billThanksSize}</Text>
+            <TouchableOpacity style={uiStyles.stepBtn} onPress={() => adjustSize('billThanksSize', 2)}><Text style={uiStyles.stepText}>+</Text></TouchableOpacity>
           </View>
         </View>
       </View>
@@ -114,20 +149,16 @@ export default function StylesModal({ visible, onClose, currentStyles, onSave })
 
   const renderKOTStyles = () => (
     <View>
-      <Text style={uiStyles.sectionTitle}>KOT Token Layout</Text>
-      
+      <Text style={uiStyles.sectionTitle}>KOT Layout</Text>
       <View style={uiStyles.styleRow}>
         <View style={{ flex: 1 }}>
-          <Text style={uiStyles.label}>Title Size (KOT/TOKEN)</Text>
+          <Text style={uiStyles.label}>KOT Title Size</Text>
           <View style={uiStyles.stepper}>
             <TouchableOpacity style={uiStyles.stepBtn} onPress={() => adjustSize('kotTitleSize', -2)}><Text style={uiStyles.stepText}>-</Text></TouchableOpacity>
             <Text style={uiStyles.stepVal}>{styles.kotTitleSize}</Text>
             <TouchableOpacity style={uiStyles.stepBtn} onPress={() => adjustSize('kotTitleSize', 2)}><Text style={uiStyles.stepText}>+</Text></TouchableOpacity>
           </View>
         </View>
-      </View>
-
-      <View style={uiStyles.styleRow}>
         <View style={{ flex: 1 }}>
           <Text style={uiStyles.label}>Category Header Size</Text>
           <View style={uiStyles.stepper}>
@@ -140,7 +171,7 @@ export default function StylesModal({ visible, onClose, currentStyles, onSave })
 
       <View style={uiStyles.styleRow}>
         <View style={{ flex: 1 }}>
-          <Text style={uiStyles.label}>Item Font Size</Text>
+          <Text style={uiStyles.label}>Item Name Size</Text>
           <View style={uiStyles.stepper}>
             <TouchableOpacity style={uiStyles.stepBtn} onPress={() => adjustSize('kotItemSize', -2)}><Text style={uiStyles.stepText}>-</Text></TouchableOpacity>
             <Text style={uiStyles.stepVal}>{styles.kotItemSize}</Text>
@@ -148,7 +179,7 @@ export default function StylesModal({ visible, onClose, currentStyles, onSave })
           </View>
         </View>
         <View style={{ flex: 1 }}>
-          <Text style={uiStyles.label}>Time Size</Text>
+          <Text style={uiStyles.label}>KOT Time Size</Text>
           <View style={uiStyles.stepper}>
             <TouchableOpacity style={uiStyles.stepBtn} onPress={() => adjustSize('kotTimeSize', -2)}><Text style={uiStyles.stepText}>-</Text></TouchableOpacity>
             <Text style={uiStyles.stepVal}>{styles.kotTimeSize}</Text>
@@ -156,8 +187,6 @@ export default function StylesModal({ visible, onClose, currentStyles, onSave })
           </View>
         </View>
       </View>
-
-      <Text style={uiStyles.infoText}>💡 KOT layout changes will reflect on the printed kitchen tokens.</Text>
     </View>
   );
 

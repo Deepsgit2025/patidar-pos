@@ -56,27 +56,15 @@ MENU.forEach(cat => cat.items.forEach(item => {
   CAT_MAP[item.id] = cat.id;
 }));
 
-export const addCustomMenuItem = (newItem, categoryId, emoji = "✨") => {
-  let cat = MENU.find(c => c.id === categoryId || c.label.toLowerCase() === categoryId.toLowerCase());
-  
-  if (!cat) {
-    cat = {
-      id: categoryId.toLowerCase().replace(/[^a-z0-9]/g, '_'),
-      label: categoryId,
-      emoji: emoji,
-      items: []
-    };
-    MENU.push(cat);
-  }
 
-  cat.items.push(newItem);
-  ITEM_MAP[newItem.id] = newItem;
-  CAT_MAP[newItem.id] = cat.id;
-};
 
-export const updateMenuItemRate = (itemId, newRate) => {
+
+export const updateMenuItem = (itemId, newRate, withSevChutney) => {
   if (ITEM_MAP[itemId]) {
     ITEM_MAP[itemId].price = parseFloat(newRate);
+    if (withSevChutney !== undefined) {
+      ITEM_MAP[itemId].withSevChutney = withSevChutney;
+    }
   }
 };
 
@@ -102,4 +90,36 @@ export const removeCategoryAndItems = (categoryId) => {
     });
     MENU.splice(catIdx, 1);
   }
+};
+
+export const addItemToMenu = (itemData) => {
+  let category = MENU.find(c => c.id === itemData.categoryId);
+  
+  if (!category && itemData.categoryName) {
+    const newCatId = itemData.categoryName.toLowerCase().replace(/\s+/g, '_');
+    category = {
+      id: newCatId,
+      label: itemData.categoryName,
+      emoji: "🆕",
+      items: []
+    };
+    MENU.push(category);
+  }
+
+  if (category) {
+    const newItem = {
+      id: itemData.id,
+      name: itemData.name,
+      price: itemData.price,
+      unit: itemData.unit,
+      byWeight: itemData.byWeight,
+      withSevChutney: itemData.withSevChutney,
+      img: itemData.img
+    };
+    category.items.push(newItem);
+    ITEM_MAP[newItem.id] = newItem;
+    CAT_MAP[newItem.id] = category.id;
+    return { item: newItem, category: category };
+  }
+  return null;
 };
